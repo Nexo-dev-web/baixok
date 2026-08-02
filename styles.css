@@ -37,23 +37,22 @@ p, label, .brand span { color: var(--muted); }
 .dark-button { color: var(--ink); background: rgba(255,255,255,.08); }
 .admin-link:hover, .primary:hover, .secondary:hover, .danger:hover { transform: translateY(-1px); filter: saturate(1.08); box-shadow: 0 12px 30px rgba(0,0,0,.28); }
 .admin-link:active, .primary:active, .secondary:active, .danger:active, .tab:active, .filter:active { transform: translateY(1px) scale(.99); }
-.hero { position: relative; min-height: clamp(620px, 84vh, 860px); display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, 360px); gap: 28px; align-items: end; padding: clamp(34px, 6vw, 76px) clamp(16px, 5vw, 64px); border-bottom: 1px solid rgba(243,198,107,.18); background: linear-gradient(90deg, rgba(3,2,1,.9) 0%, rgba(8,5,3,.68) 38%, rgba(8,5,3,.3) 68%, rgba(3,2,1,.72) 100%), linear-gradient(180deg, rgba(0,0,0,.16), rgba(0,0,0,.92)), url("images/loja-baixo-k-hero.png") center/cover; overflow: hidden; }
+.hero { position: relative; min-height: clamp(500px, 68vh, 720px); display: grid; grid-template-columns: minmax(0, 1fr) minmax(210px, 300px); gap: 28px; align-items: end; padding: clamp(34px, 6vw, 76px) clamp(16px, 5vw, 64px); border-bottom: 1px solid rgba(243,198,107,.18); background: linear-gradient(90deg, rgba(3,2,1,.92) 0%, rgba(8,5,3,.72) 42%, rgba(8,5,3,.36) 70%, rgba(3,2,1,.7) 100%), linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.9)), url("images/loja-baixo-k-hero.png") center/cover; overflow: hidden; }
 .hero::before { content: ""; position: absolute; inset: 0; background: linear-gradient(120deg, rgba(243,198,107,.13), transparent 32%, rgba(199,122,67,.16) 100%); pointer-events: none; mix-blend-mode: screen; }
 .hero::after { content: ""; position: absolute; inset: auto 0 0; height: 34%; background: linear-gradient(180deg, transparent, var(--bg)); pointer-events: none; }
-.hero-copy { position: relative; z-index: 1; max-width: 760px; display: grid; gap: 14px; padding-bottom: clamp(14px, 4vh, 42px); animation: heroIn .62s ease both; }
-.hero-mark { width: 96px; height: 96px; object-fit: cover; border: 1px solid rgba(243,198,107,.42); border-radius: 18px; box-shadow: 0 18px 48px rgba(0,0,0,.48); }
+.hero-copy { position: relative; z-index: 1; max-width: 640px; display: grid; gap: 12px; padding-bottom: clamp(10px, 3vh, 32px); animation: heroIn .62s ease both; }
+.hero-mark { width: 76px; height: 76px; object-fit: cover; border: 1px solid rgba(243,198,107,.42); border-radius: 14px; box-shadow: 0 18px 48px rgba(0,0,0,.48); }
 .eyebrow, .badge { display: inline-flex; width: max-content; max-width: 100%; padding: 6px 10px; border-radius: 999px; color: #170d08; background: var(--gold); font-size: .78rem; font-weight: 900; text-transform: uppercase; }
 .live-badge::before { content: ""; width: 8px; height: 8px; margin: 4px 7px 0 0; border-radius: 50%; background: #1fbf6b; box-shadow: 0 0 0 5px rgba(31,191,107,.18); }
-.hero h1 { max-width: 780px; color: var(--ink); font-size: clamp(4.2rem, 12vw, 9rem); line-height: .82; letter-spacing: 0; text-shadow: 0 20px 48px rgba(0,0,0,.8); }
+.hero h1 { max-width: 780px; color: var(--ink); font-size: clamp(3.8rem, 10vw, 7.6rem); line-height: .82; letter-spacing: 0; text-shadow: 0 20px 48px rgba(0,0,0,.8); }
 .hero h1::after { content: "Pizza | Burgues | Massas | Drinks"; display: block; margin-top: 12px; color: var(--gold); font-size: clamp(.9rem, 1.8vw, 1.15rem); line-height: 1.2; text-transform: uppercase; font-weight: 1000; }
-.hero p { max-width: 560px; font-size: clamp(1.08rem, 2.2vw, 1.35rem); line-height: 1.45; }
+.hero p { max-width: 560px; font-size: clamp(1.02rem, 2vw, 1.24rem); line-height: 1.35; }
 .hero-highlights { display: flex; gap: 8px; flex-wrap: wrap; }
 .hero-highlights span { padding: 8px 10px; border: 1px solid rgba(243,198,107,.28); border-radius: 999px; color: var(--ink); background: rgba(255,255,255,.08); font-size: .86rem; font-weight: 900; }
 .hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-.venue-card { position: relative; z-index: 1; align-self: end; display: grid; gap: 8px; padding: 18px; border: 1px solid rgba(243,198,107,.35); border-radius: 8px; background: linear-gradient(145deg, rgba(255,248,236,.13), rgba(199,122,67,.12)), rgba(10,7,5,.72); box-shadow: var(--shadow); backdrop-filter: blur(10px); }
-.venue-card span { color: var(--gold); font-size: .78rem; font-weight: 1000; text-transform: uppercase; }
-.venue-card strong { color: var(--ink); font-size: 1.55rem; line-height: 1; }
-.venue-card p { line-height: 1.38; }
+.venue-card { position: relative; z-index: 1; align-self: end; justify-self: end; display: grid; gap: 4px; width: max-content; max-width: 100%; padding: 12px 14px; border: 1px solid rgba(243,198,107,.28); border-radius: 8px; background: rgba(10,7,5,.56); box-shadow: var(--shadow); backdrop-filter: blur(10px); }
+.venue-card span { color: var(--muted); font-size: .88rem; font-weight: 800; }
+.venue-card strong { color: var(--gold); font-size: 1rem; line-height: 1; }
 .mobile-order-strip { display: none; gap: 10px; padding: 0 clamp(14px, 4vw, 46px); margin-top: -42px; position: relative; z-index: 2; overflow-x: auto; }
 .mobile-order-strip div { min-width: 190px; padding: 14px; border: 1px solid rgba(243,198,107,.25); border-radius: 8px; background: linear-gradient(145deg, rgba(243,198,107,.16), rgba(255,255,255,.06)), var(--panel); box-shadow: var(--shadow); }
 .mobile-order-strip strong { display: block; color: var(--gold); }
@@ -263,11 +262,11 @@ body.cart-open .cart-backdrop { display: block; }
 @media (max-width: 900px) {
   .menu-topbar { position: absolute; width: 100%; background: linear-gradient(180deg, rgba(0,0,0,.72), transparent); box-shadow: none; }
   .menu-topbar .admin-link { display: none; }
-  .hero { grid-template-columns: 1fr; min-height: 100svh; align-content: end; padding: 96px 14px 86px; background-position: center top; }
-  .hero h1 { font-size: clamp(4.6rem, 24vw, 7rem); }
-  .hero-copy { gap: 12px; align-self: end; }
+  .hero { grid-template-columns: 1fr; min-height: 64svh; align-content: end; padding: 86px 14px 58px; background-position: center top; }
+  .hero h1 { font-size: clamp(3.8rem, 21vw, 6rem); }
+  .hero-copy { gap: 10px; align-self: end; }
   .hero-actions .primary, .hero-actions .secondary { flex: 1; min-height: 52px; }
-  .hero-mark { width: 82px; height: 82px; border-radius: 16px; }
+  .hero-mark { width: 68px; height: 68px; border-radius: 14px; }
   .venue-card { display: none; }
   .mobile-order-strip { display: flex; }
   .shop-layout, .admin-grid, .manual-grid, .dashboard-columns, .screen-board, .kanban, .product-form, .dashboard-grid, .experience-strip { grid-template-columns: 1fr; }
