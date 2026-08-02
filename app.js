@@ -1,6 +1,7 @@
 const DB_KEY = "baixoKSystem.v1";
 const CART_KEY = "baixoKCart.v1";
 const ACTIVE_LOGO = "images/baixok-logo-v2.png";
+const DELIVERY_WHATSAPP = "5521990180151";
 const CATEGORY_IMAGES = {
   pizzas: "images/produto-pizza.png",
   burgues: "images/produto-burguer.png",
@@ -305,6 +306,27 @@ function createOrder(order) {
   saveDb(data);
   return data.orders[0];
 }
+function orderWhatsappText(order) {
+  const items = order.items.map(item => `- ${item.qty}x ${item.name} | R$ ${money(Number(item.price || 0) * Number(item.qty || 1))}`).join("\n");
+  return [
+    "Novo pedido de ENTREGA - Baixo K",
+    `Pedido: #${String(order.id).slice(-5)}`,
+    `Cliente: ${order.customer}`,
+    order.phone ? `Telefone: ${order.phone}` : "",
+    `Endereco: ${order.place}`,
+    `Pagamento: ${order.payment}`,
+    "",
+    "Itens:",
+    items,
+    "",
+    `Total: R$ ${money(order.total)}`,
+    order.note ? `Observacao: ${order.note}` : ""
+  ].filter(Boolean).join("\n");
+}
+function openDeliveryWhatsapp(order) {
+  const url = `https://wa.me/${DELIVERY_WHATSAPP}?text=${encodeURIComponent(orderWhatsappText(order))}`;
+  window.open(url, "_blank", "noopener");
+}
 function sendOrder() {
   const rows = cart();
   if (!rows.length) return alert("Adicione pelo menos um item.");
@@ -315,11 +337,12 @@ function sendOrder() {
   const note = document.getElementById("order-note").value.trim();
   const place = fulfillmentMode === "retirada" ? (placeValue || "Retirada no balcao") : placeValue;
   if (!customer || !place || !payment) return alert("Preencha cliente, local e pagamento.");
-  createOrder({ customer, phone, place, payment, note, channel: "cardapio", fulfillment: fulfillmentMode, items: rows, total: cartTotal() });
+  const order = createOrder({ customer, phone, place, payment, note, channel: "cardapio", fulfillment: fulfillmentMode, items: rows, total: cartTotal() });
+  if (fulfillmentMode === "entrega") openDeliveryWhatsapp(order);
   clearCart();
   ["customer-name", "customer-phone", "customer-place", "order-note"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("payment-method").value = "";
-  toast("Pedido enviado para a cozinha.");
+  toast(fulfillmentMode === "entrega" ? "Pedido enviado e WhatsApp aberto para entrega." : "Pedido enviado para a cozinha.");
 }
 
 function initAdmin() {
