@@ -122,9 +122,37 @@ function localTime(value) {
 function initMenu() {
   if (!document.querySelector('[data-page="menu"]')) return;
   renderFilters();
+  renderSignatureProducts();
   renderMenu();
   renderCart();
   setFulfillment("retirada");
+}
+function signatureProducts() {
+  const products = activeProducts();
+  const picked = [];
+  const add = product => {
+    if (product && !picked.some(item => item.id === product.id)) picked.push(product);
+  };
+  add(products.find(product => /baixo k|mais pedida|especial/i.test(`${product.name} ${product.badge || ""}`)));
+  ["burgues", "drinks", "pizzas", "massas"].forEach(category => add(products.find(product => product.category === category)));
+  products.forEach(add);
+  return picked.slice(0, 3);
+}
+function renderSignatureProducts() {
+  const target = document.getElementById("signature");
+  if (!target) return;
+  const labels = ["Destaque da casa", "Pedido forte", "Combina com tudo"];
+  const rows = signatureProducts();
+  target.innerHTML = rows.length ? rows.map((product, index) => `
+    <article onclick="setCategory('${product.category}'); document.getElementById('menu-shell')?.scrollIntoView({ behavior: 'smooth' })">
+      <img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product.name)}">
+      <div>
+        <span>${escapeHtml(product.badge || labels[index] || CATEGORIES[product.category] || "Destaque")}</span>
+        <strong>${escapeHtml(product.name)}</strong>
+        <em>R$ ${money(product.price)}</em>
+      </div>
+    </article>
+  `).join("") : "";
 }
 function renderFilters() {
   const target = document.getElementById("filters");
