@@ -56,8 +56,7 @@ p, label, .brand span { color: var(--muted); }
 .mobile-order-strip span { display: block; margin-top: 4px; color: var(--muted); font-size: .9rem; }
 .signature-strip { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .signature-strip article { position: relative; min-height: 210px; overflow: hidden; border: 1px solid rgba(243,198,107,.24); border-radius: 8px; background: #0b0705; box-shadow: var(--shadow); cursor: pointer; }
-.signature-strip img { width: 100%; height: 100%; min-height: 210px; object-fit: cover; filter: saturate(1.08) contrast(1.04); transition: transform .22s ease; }
-.signature-strip article:hover img { transform: scale(1.04); }
+.signature-strip img { width: 100%; height: 100%; min-height: 210px; object-fit: contain; background: radial-gradient(circle at center, rgba(243,198,107,.08), #050403 72%); filter: saturate(1.06) contrast(1.02); }
 .signature-strip article::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 28%, rgba(0,0,0,.86)); }
 .signature-strip div { position: absolute; left: 14px; right: 14px; bottom: 14px; z-index: 1; display: grid; gap: 4px; }
 .signature-strip span { color: var(--gold); font-size: .78rem; font-weight: 1000; text-transform: uppercase; }
@@ -88,12 +87,11 @@ p, label, .brand span { color: var(--muted); }
 .filter.active { color: #170d08; border-color: var(--gold); background: linear-gradient(135deg, var(--gold), var(--copper)); }
 .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 16px; }
 .product, .order-card, .cart-row { border: 1px solid var(--line); border-radius: 8px; background: var(--soft); }
-.product { position: relative; overflow: hidden; border-color: rgba(243,198,107,.18); background: linear-gradient(160deg, rgba(255,248,236,.08), rgba(199,122,67,.1)), #140c07; box-shadow: 0 16px 46px rgba(0,0,0,.28); transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
+.product { position: relative; overflow: hidden; border-color: rgba(243,198,107,.18); background: linear-gradient(160deg, rgba(255,248,236,.08), rgba(199,122,67,.1)), #140c07; box-shadow: 0 16px 46px rgba(0,0,0,.28); transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease; content-visibility: auto; contain-intrinsic-size: 420px; }
 .product::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, transparent 38%, rgba(0,0,0,.45)); opacity: .8; }
 .product:hover { transform: translateY(-3px); border-color: rgba(243,198,107,.55); box-shadow: 0 24px 60px rgba(0,0,0,.42); }
 .product .badge { position: absolute; top: 10px; left: 10px; z-index: 2; }
-.product img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: #080605; filter: saturate(1.12) contrast(1.05); transition: transform .22s ease; }
-.product:hover img { transform: scale(1.035); }
+.product img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: radial-gradient(circle at center, rgba(243,198,107,.08), #080605 72%); filter: saturate(1.08) contrast(1.02); }
 .product-body { position: relative; z-index: 1; display: grid; gap: 8px; padding: 14px; }
 .product strong { color: var(--gold); font-size: 1.12rem; }
 .product .price-row span { color: var(--ink); font-size: 1.15rem; font-weight: 1000; }
@@ -157,7 +155,7 @@ p, label, .brand span { color: var(--muted); }
 .manual-product-list { display: grid; gap: 8px; max-height: 560px; overflow: auto; }
 .manual-product { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--soft); text-align: left; transition: transform .16s ease, border-color .16s ease; }
 .manual-product:hover { transform: translateY(-1px); border-color: rgba(243,198,107,.48); }
-.manual-product img { width: 74px; height: 64px; object-fit: cover; border-radius: 8px; background: #080605; }
+.manual-product img { width: 74px; height: 64px; object-fit: contain; border-radius: 8px; background: #080605; }
 .manual-product strong { display: block; color: var(--gold); }
 .manual-product span { display: grid; gap: 3px; color: var(--muted); }
 .manual-product em { color: var(--muted); font-style: normal; }
@@ -175,7 +173,7 @@ p, label, .brand span { color: var(--muted); }
 .product-admin-list { display: grid; gap: 10px; }
 .product-admin { display: grid; grid-template-columns: 82px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--soft); }
 .product-admin.paused { opacity: .62; border-style: dashed; }
-.product-admin img { width: 82px; height: 82px; object-fit: cover; border-radius: 8px; }
+.product-admin img { width: 82px; height: 82px; object-fit: contain; border-radius: 8px; background: #080605; }
 .product-admin strong { display: block; color: var(--gold); }
 .product-admin span, .product-admin p { display: block; margin-top: 4px; }
 .stock-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
@@ -200,7 +198,8 @@ p, label, .brand span { color: var(--muted); }
 .nexo-footer { padding: 22px 14px 30px; color: rgba(255,248,236,.58); text-align: center; font-size: .86rem; }
 .nexo-footer a { color: var(--gold); font-weight: 900; text-decoration: none; }
 .nexo-footer a:hover { text-decoration: underline; }
-.screen-footer { position: fixed; left: 0; right: 0; bottom: 4px; padding: 6px; background: transparent; }
+.screen-footer { position: fixed; left: 0; right: 0; bottom: 4px; display: flex; align-items: center; justify-content: center; gap: 16px; padding: 6px; background: transparent; }
+.screen-instagram { padding: 5px 9px; border: 1px solid rgba(243,198,107,.28); border-radius: 999px; background: rgba(0,0,0,.22); }
 .support-modal { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 18px; background: rgba(0,0,0,.64); }
 .support-modal.hidden { display: none; }
 .support-panel { width: min(920px, 100%); max-height: 88vh; overflow: auto; padding: 20px; border: 1px solid rgba(243,198,107,.24); border-top: 5px solid var(--gold); border-radius: 8px; background: var(--panel); box-shadow: 0 28px 90px rgba(0,0,0,.58); }

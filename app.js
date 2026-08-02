@@ -154,7 +154,7 @@ function renderSignatureProducts() {
   const rows = signatureProducts();
   target.innerHTML = rows.length ? rows.map((product, index) => `
     <article onclick="setCategory('${product.category}'); document.getElementById('menu-shell')?.scrollIntoView({ behavior: 'smooth' })">
-      <img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product.name)}">
+      <img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product.name)}" loading="lazy" decoding="async">
       <div>
         <span>${escapeHtml(product.badge || labels[index] || CATEGORIES[product.category] || "Destaque")}</span>
         <strong>${escapeHtml(product.name)}</strong>
@@ -185,7 +185,7 @@ function renderMenu() {
   target.innerHTML = list.length ? list.map(product => `
     <article class="product">
       <span class="badge">${escapeHtml(product.badge || CATEGORIES[product.category] || "Item")}</span>
-      <img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product.name)}">
+      <img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product.name)}" loading="lazy" decoding="async">
       <div class="product-body">
         <strong>${escapeHtml(product.name)}</strong>
         <p>${escapeHtml(product.description)}</p>
@@ -409,7 +409,7 @@ function renderManualProducts() {
   const products = activeProducts().filter(product => `${product.name} ${product.category}`.toLowerCase().includes(search));
   target.innerHTML = products.map(product => `
     <button class="manual-product" onclick="addManualItem('${product.id}')">
-      <img src="${escapeHtml(productImage(product))}" alt="">
+      <img src="${escapeHtml(productImage(product))}" alt="" loading="lazy" decoding="async">
       <span>
         <strong>${escapeHtml(product.name)}</strong>
         <em>R$ ${money(product.price)} | ${product.stock} em estoque</em>
@@ -492,14 +492,14 @@ function handleProductPhoto(event) {
   reader.onload = () => {
     const image = new Image();
     image.onload = () => {
-      const max = 1100;
+      const max = 900;
       const scale = Math.min(1, max / Math.max(image.width, image.height));
       const canvas = document.createElement("canvas");
       canvas.width = Math.round(image.width * scale);
       canvas.height = Math.round(image.height * scale);
       const context = canvas.getContext("2d");
       context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.78);
       document.getElementById("product-image").value = dataUrl;
       updateProductPhotoPreview(dataUrl);
       toast("Foto carregada no produto.");
@@ -538,7 +538,7 @@ function renderProductsAdmin() {
   if (!target) return;
   target.innerHTML = getProducts().map(product => `
     <article class="product-admin ${product.active === false ? "paused" : ""}">
-      <img src="${escapeHtml(productImage(product))}" alt="">
+      <img src="${escapeHtml(productImage(product))}" alt="" loading="lazy" decoding="async">
       <div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(CATEGORIES[product.category])} | R$ ${money(product.price)} | Estoque ${product.stock}</span><p>${escapeHtml(product.description)}</p></div>
       <div class="order-actions"><button class="secondary" onclick="editProduct('${product.id}')">Editar</button><button class="secondary" onclick="toggleProduct('${product.id}')">${product.active === false ? "Ativar" : "Pausar"}</button></div>
     </article>
