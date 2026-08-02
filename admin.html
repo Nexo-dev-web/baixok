@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Baixo K - Sistema</title>
+  <meta name="theme-color" content="#f3c66b">
+  <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body data-page="admin">
@@ -18,6 +20,7 @@
     <div class="top-actions">
       <a class="secondary" href="index.html" target="_blank" rel="noopener">Cardapio</a>
       <a class="secondary" href="https://www.instagram.com/baixok_/" target="_blank" rel="noopener">Instagram</a>
+      <button class="secondary install-button hidden" id="install-app" onclick="installApp()">Instalar app</button>
       <button class="secondary" onclick="openSupport()">Suporte Nexo</button>
       <a class="admin-link" href="telao.html" target="_blank" rel="noopener">Telao de pedidos</a>
     </div>
@@ -305,6 +308,7 @@
   <div class="toast" id="toast"></div>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="app.js"></script>
+  <script>registerPwa();</script>
   <script>initAdmin();</script>
 </body>
 </html>

@@ -57,6 +57,9 @@ let currentCategory = "todos";
 let fulfillmentMode = "retirada";
 let manualCart = [];
 let screenSnapshot = "";
+let installPrompt = null;
+let screenSoundEnabled = false;
+let screenAudioContext = null;
 
 const money = value => Number(value || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const uid = prefix => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
@@ -117,6 +120,26 @@ function toast(message) {
   target.classList.add("show");
   clearTimeout(window.toastTimer);
   window.toastTimer = setTimeout(() => target.classList.remove("show"), 2600);
+}
+function registerPwa() {
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("service-worker.js").catch(() => {});
+  }
+  window.addEventListener("beforeinstallprompt", event => {
+    event.preventDefault();
+    installPrompt = event;
+    document.getElementById("install-app")?.classList.remove("hidden");
+  });
+}
+async function installApp() {
+  if (!installPrompt) {
+    toast("No celular, use o menu do navegador e toque em Adicionar a tela inicial.");
+    return;
+  }
+  installPrompt.prompt();
+  await installPrompt.userChoice;
+  installPrompt = null;
+  document.getElementById("install-app")?.classList.add("hidden");
 }
 function openSupport() {
   document.getElementById("support-modal")?.classList.remove("hidden");
@@ -769,6 +792,34 @@ function initScreen() {
   window.addEventListener("storage", renderScreen);
   window.addEventListener("baixoKDataChanged", renderScreen);
 }
+function enableScreenSound() {
+  screenAudioContext = screenAudioContext || new (window.AudioContext || window.webkitAudioContext)();
+  screenAudioContext.resume();
+  screenSoundEnabled = true;
+  playScreenSound();
+  const button = document.getElementById("sound-toggle");
+  if (button) {
+    button.textContent = "Som ativo";
+    button.classList.add("active");
+  }
+}
+function playScreenSound() {
+  if (!screenSoundEnabled || !screenAudioContext) return;
+  const now = screenAudioContext.currentTime;
+  [0, .14, .28].forEach((offset, index) => {
+    const osc = screenAudioContext.createOscillator();
+    const gain = screenAudioContext.createGain();
+    osc.type = "sine";
+    osc.frequency.value = [880, 1174, 1568][index];
+    gain.gain.setValueAtTime(0.001, now + offset);
+    gain.gain.exponentialRampToValueAtTime(0.22, now + offset + .02);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + offset + .12);
+    osc.connect(gain);
+    gain.connect(screenAudioContext.destination);
+    osc.start(now + offset);
+    osc.stop(now + offset + .14);
+  });
+}
 function renderScreen() {
   if (!document.querySelector('[data-page="screen"]')) return;
   const now = new Date();
@@ -779,9 +830,11 @@ function renderScreen() {
   const newest = active.find(order => order.id === data.lastHighlightedOrderId) || active[0];
   const snapshot = JSON.stringify(active.map(order => [order.id, order.status, order.customer]));
   if (snapshot !== screenSnapshot) {
+    const hadSnapshot = Boolean(screenSnapshot);
     screenSnapshot = snapshot;
     document.body.classList.add("screen-pulse");
     setTimeout(() => document.body.classList.remove("screen-pulse"), 900);
+    if (hadSnapshot && active.length) playScreenSound();
   }
   document.getElementById("screen-highlight").innerHTML = newest ? `
     <span class="eyebrow">Pedido em destaque</span>
