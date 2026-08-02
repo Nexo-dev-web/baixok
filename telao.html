@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Baixo K - Telao de Pedidos</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="screen">
+  <main class="screen-page">
+    <header class="screen-header">
+      <div class="brand">
+        <img src="images/baixok-logo-simples.jpg" alt="Baixo K">
+        <div>
+          <strong>Baixo K</strong>
+          <span>Telao de pedidos</span>
+        </div>
+      </div>
+      <div class="screen-clock" id="screen-clock"></div>
+    </header>
+
+    <section class="screen-highlight" id="screen-highlight"></section>
+
+    <section class="screen-board">
+      <div>
+        <h1>Em preparo</h1>
+        <div class="screen-list" id="screen-preparing"></div>
+      </div>
+      <div>
+        <h1>Pronto para retirada</h1>
+        <div class="screen-list ready-list" id="screen-ready"></div>
+      </div>
+    </section>
+  </main>
+  <footer class="nexo-footer screen-footer">
+    Desenvolvido pela <a href="https://portfolio-nexo.netlify.app/" target="_blank" rel="noopener">Nexo Developer</a>
+  </footer>
+  <script src="app.js"></script>
+  <script>initScreen();</script>
+</body>
+</html>

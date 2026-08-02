@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Baixo K - Cardapio</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="menu">
+  <header class="topbar menu-topbar">
+    <div class="brand">
+      <img src="images/baixok-logo-simples.jpg" alt="Baixo K">
+      <div>
+        <strong>Baixo K</strong>
+        <span>Pizza, burgues, massas e drinks</span>
+      </div>
+    </div>
+    <a class="admin-link" href="admin.html">Painel</a>
+  </header>
+
+  <section class="hero menu-hero">
+    <div class="hero-copy">
+      <img class="hero-mark" src="images/baixok-logo-simples.jpg" alt="Baixo K">
+      <span class="eyebrow live-badge">Aberto para pedidos</span>
+      <h1>Baixo K</h1>
+      <p>Da mesa para a cozinha: pizzas, burgues, massas e drinks com pedido rapido pelo QR code.</p>
+      <div class="hero-highlights">
+        <span>Pizza no capricho</span>
+        <span>Burguer prensado</span>
+        <span>Drink gelado</span>
+      </div>
+      <div class="hero-actions">
+        <a class="primary" href="#menu-shell">Comecar pedido</a>
+        <a class="secondary dark-button" href="#signature">Ver destaques</a>
+      </div>
+    </div>
+    <div class="venue-card" aria-label="Baixo K loja">
+      <span>Loja E</span>
+      <strong>Seu pedido aparece no telao</strong>
+      <p>Quando estiver pronto, seu nome vai para retirada.</p>
+    </div>
+  </section>
+
+  <main class="shop-layout">
+    <section class="mobile-order-strip" aria-label="Destaques do cardapio">
+      <div><strong>Pizza Baixo K</strong><span>Massa da casa</span></div>
+      <div><strong>Burguer Duplo K</strong><span>Carne, bacon e cheddar</span></div>
+      <div><strong>Drinks</strong><span>Gelados para acompanhar</span></div>
+    </section>
+
+    <section class="signature-strip" id="signature" aria-label="Destaques Baixo K">
+      <article>
+        <img src="images/produto-pizza.png" alt="Pizza Baixo K">
+        <div><span>Mais pedida</span><strong>Pizza Baixo K</strong></div>
+      </article>
+      <article>
+        <img src="images/produto-burguer.png" alt="Burguer Duplo K">
+        <div><span>Casa</span><strong>Burguer Duplo K</strong></div>
+      </article>
+      <article>
+        <img src="images/produto-drinks.png" alt="Drinks Baixo K">
+        <div><span>Combina com tudo</span><strong>Drinks gelados</strong></div>
+      </article>
+    </section>
+
+    <section class="experience-strip" aria-label="Como funciona">
+      <div><strong>1</strong><span>Monte seu pedido no celular</span></div>
+      <div><strong>2</strong><span>Escolha retirada ou entrega</span></div>
+      <div><strong>3</strong><span>Acompanhe seu nome no telao</span></div>
+    </section>
+
+    <section class="menu-shell" id="menu-shell">
+      <div class="section-head">
+        <div>
+          <span class="eyebrow">Cardapio Baixo K</span>
+          <h2>Escolha o que vai para a mesa</h2>
+          <p>Produtos com estoque aparecem automaticamente. Finalize como retirada ou entrega.</p>
+        </div>
+        <input id="search" type="search" placeholder="Buscar pizza, burguer, drink..." oninput="renderMenu()">
+      </div>
+      <div class="filters" id="filters"></div>
+      <div class="menu-grid" id="menu"></div>
+    </section>
+
+    <aside class="cart" id="cart">
+      <div class="cart-head">
+        <div>
+          <span class="eyebrow">Checkout rapido</span>
+          <h2>Seu pedido</h2>
+        </div>
+        <strong class="cart-count" id="cart-count">0</strong>
+      </div>
+
+      <div class="cart-items" id="cart-items"></div>
+
+      <div class="service-mode" role="group" aria-label="Tipo do pedido">
+        <button class="mode-btn active" id="mode-retirada" type="button" onclick="setFulfillment('retirada')">Retirada</button>
+        <button class="mode-btn" id="mode-entrega" type="button" onclick="setFulfillment('entrega')">Entrega</button>
+      </div>
+
+      <div class="pickup-banner" id="pickup-banner">RETIRADA NO BALCAO</div>
+
+      <label>
+        Cliente
+        <input id="customer-name" placeholder="Nome para chamar no telao">
+      </label>
+      <label>
+        Telefone
+        <input id="customer-phone" placeholder="WhatsApp ou telefone">
+      </label>
+      <label id="place-label">
+        Local de entrega
+        <input id="customer-place" placeholder="Endereco completo">
+      </label>
+      <label>
+        Pagamento
+        <select id="payment-method">
+          <option value="">Selecione</option>
+          <option>Pix</option>
+          <option>Cartao</option>
+          <option>Dinheiro</option>
+        </select>
+      </label>
+      <label>
+        Observacao
+        <textarea id="order-note" rows="3" placeholder="Sem cebola, ponto da carne, troco..."></textarea>
+      </label>
+      <div class="totals">
+        <span>Total</span>
+        <strong>R$ <span id="cart-total">0,00</span></strong>
+      </div>
+      <button class="primary wide" onclick="sendOrder()">Enviar pedido</button>
+      <button class="secondary wide" onclick="clearCart()">Limpar</button>
+    </aside>
+  </main>
+
+  <button class="mobile-cart" onclick="document.getElementById('cart').scrollIntoView({ behavior: 'smooth' })">
+    Ver pedido <strong>R$ <span id="mobile-total">0,00</span></strong>
+  </button>
+
+  <footer class="nexo-footer">
+    Desenvolvido pela <a href="https://portfolio-nexo.netlify.app/" target="_blank" rel="noopener">Nexo Developer</a>
+  </footer>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>

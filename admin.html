@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Baixo K - Sistema</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="admin">
+  <header class="topbar">
+    <div class="brand">
+      <img src="images/baixok-logo-simples.jpg" alt="Baixo K">
+      <div>
+        <strong>Baixo K</strong>
+        <span>Sistema operacional</span>
+      </div>
+    </div>
+    <div class="top-actions">
+      <a class="secondary" href="index.html" target="_blank" rel="noopener">Cardapio</a>
+      <button class="secondary" onclick="openSupport()">Suporte Nexo</button>
+      <a class="admin-link" href="telao.html" target="_blank" rel="noopener">Telao de pedidos</a>
+    </div>
+  </header>
+
+  <main class="admin-app">
+    <section class="ops-hero">
+      <div>
+        <span class="eyebrow">Central Baixo K</span>
+        <h1>Operacao da cozinha ao balcao</h1>
+        <p>Pedidos novos entram na primeira coluna. Ao arrastar para preparo, cozinha e balcao imprimem automaticamente.</p>
+      </div>
+      <div class="ops-actions">
+        <a class="primary" href="telao.html" target="_blank" rel="noopener">Abrir telao</a>
+        <button class="secondary" onclick="openSupport()">Suporte Nexo</button>
+      </div>
+    </section>
+
+    <nav class="tabs" aria-label="Abas do sistema">
+      <button class="tab active" data-tab="orders" onclick="showAdminTab('orders')">Pedidos</button>
+      <button class="tab" data-tab="manual" onclick="showAdminTab('manual')">Registrar venda</button>
+      <button class="tab" data-tab="products" onclick="showAdminTab('products')">Produtos</button>
+      <button class="tab" data-tab="stock" onclick="showAdminTab('stock')">Estoque</button>
+      <button class="tab" data-tab="dashboard" onclick="showAdminTab('dashboard')">Dashboard</button>
+    </nav>
+
+    <section class="admin-tab" id="tab-orders">
+      <div class="admin-grid">
+        <section class="panel">
+          <div class="tab-guide">
+            <strong>Como usar esta aba</strong>
+            <p>Todo pedido novo cai em Novo. Arraste para Em preparo para imprimir cozinha e balcao. Arraste para Pronto quando estiver embalado. Arraste para Entregue quando o cliente recebeu; nesse momento a venda entra no dashboard e o estoque baixa.</p>
+          </div>
+          <div class="section-head">
+            <div>
+              <span class="eyebrow">Operacao</span>
+              <h1>Pedidos recebidos</h1>
+              <p>Arraste os cards entre as etapas ou use os botoes. Quando virar Entregue, entra no dashboard e baixa estoque.</p>
+            </div>
+            <button class="secondary" onclick="renderAdmin()">Atualizar</button>
+          </div>
+          <div class="kanban" id="orders-kanban"></div>
+        </section>
+
+        <aside class="panel side-panel">
+          <h2>Impressoras</h2>
+          <p class="setup-text">A Elgin i8 imprime pelo dialogo do navegador neste MVP. Para impressao silenciosa, entra um agente local no Windows.</p>
+          <div class="print-actions">
+            <button class="secondary" onclick="printTest('kitchen')">Teste cozinha</button>
+            <button class="secondary" onclick="printTest('counter')">Teste balcao</button>
+          </div>
+          <div class="metric-stack" id="today-mini"></div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="admin-tab hidden" id="tab-manual">
+      <div class="admin-grid">
+        <section class="panel">
+          <div class="tab-guide">
+            <strong>Como usar esta aba</strong>
+            <p>Registre vendas que nao vieram do cardapio, como loja, iFood, 99Food, Rappi ou WhatsApp. Escolha o canal, adicione os produtos, confira o total e salve. A venda entra na fila para controle e pode ser entregue depois.</p>
+          </div>
+          <div class="section-head">
+            <div>
+              <span class="eyebrow">Venda externa</span>
+              <h1>Registrar venda</h1>
+              <p>Use para pedidos de loja, iFood, 99Food, Rappi ou venda manual do caixa.</p>
+            </div>
+          </div>
+          <div class="manual-grid">
+            <div class="manual-products">
+              <input id="manual-search" type="search" placeholder="Buscar produto..." oninput="renderManualProducts()">
+              <div class="manual-product-list" id="manual-products"></div>
+            </div>
+            <div class="manual-sale-card">
+              <label>Canal da venda
+                <select id="manual-channel">
+                  <option value="loja">Loja</option>
+                  <option value="ifood">iFood</option>
+                  <option value="99food">99Food</option>
+                  <option value="rappi">Rappi</option>
+                  <option value="whatsapp">WhatsApp</option>
+                </select>
+              </label>
+              <label>Tipo do pedido
+                <select id="manual-fulfillment">
+                  <option value="retirada">Retirada</option>
+                  <option value="entrega">Entrega</option>
+                  <option value="mesa">Mesa</option>
+                </select>
+              </label>
+              <label>Cliente
+                <input id="manual-customer" placeholder="Cliente ou plataforma">
+              </label>
+              <label>Local
+                <input id="manual-place" placeholder="Balcao, mesa ou endereco">
+              </label>
+              <label>Pagamento
+                <select id="manual-payment">
+                  <option>Pix</option>
+                  <option>Cartao</option>
+                  <option>Dinheiro</option>
+                  <option>Online</option>
+                </select>
+              </label>
+              <label>Observacao
+                <textarea id="manual-note" rows="3" placeholder="Detalhes do pedido externo"></textarea>
+              </label>
+              <div class="cart-items" id="manual-cart"></div>
+              <div class="totals">
+                <span>Total</span>
+                <strong>R$ <span id="manual-total">0,00</span></strong>
+              </div>
+              <button class="primary wide" onclick="saveManualSale()">Salvar venda</button>
+              <button class="secondary wide" onclick="clearManualCart()">Limpar venda</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="admin-tab hidden" id="tab-products">
+      <section class="panel">
+        <div class="tab-guide">
+          <strong>Como usar esta aba</strong>
+          <p>Cadastre e edite o cardapio que o cliente ve no QR code. Produto ativo aparece no cardapio enquanto tiver estoque. Use Pausar para esconder item esgotado ou fora de venda sem apagar o cadastro.</p>
+        </div>
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Catalogo</span>
+            <h1>Produtos do cardapio</h1>
+            <p>Cadastre produtos, ajuste preco, categoria, foto e pause itens esgotados.</p>
+          </div>
+        </div>
+        <form class="product-form" onsubmit="saveProductForm(event)">
+          <input id="product-id" type="hidden">
+          <label>Nome <input id="product-name" required placeholder="Ex: Pizza Baixo K"></label>
+          <label>Categoria
+            <select id="product-category">
+              <option value="pizzas">Pizzas</option>
+              <option value="burgues">Burgues</option>
+              <option value="massas">Massas</option>
+              <option value="drinks">Drinks</option>
+              <option value="porcoes">Porcoes</option>
+            </select>
+          </label>
+          <label>Preco <input id="product-price" type="number" step="0.01" min="0" required></label>
+          <label>Estoque <input id="product-stock" type="number" step="1" min="0" required></label>
+          <label class="photo-field">Foto do produto
+            <input id="product-image" placeholder="URL ou caminho da imagem" oninput="updateProductPhotoPreview(this.value)">
+            <input id="product-photo-file" type="file" accept="image/*" capture="environment" onchange="handleProductPhoto(event)">
+            <span>Escolha uma foto do PC/celular ou tire na hora pela camera.</span>
+          </label>
+          <div class="product-photo-preview">
+            <img id="product-photo-preview" src="images/produto-pizza.png" alt="Preview da foto">
+          </div>
+          <label class="wide-field">Descricao <input id="product-description" required placeholder="Descricao curta do item"></label>
+          <div class="form-actions">
+            <label class="check-field"><input id="product-active" type="checkbox" checked> Ativo no cardapio</label>
+            <button class="primary" type="submit">Salvar produto</button>
+            <button class="secondary" type="button" onclick="resetProductForm()">Novo</button>
+          </div>
+        </form>
+        <div class="product-admin-list" id="product-admin-list"></div>
+      </section>
+    </section>
+
+    <section class="admin-tab hidden" id="tab-stock">
+      <section class="panel">
+        <div class="tab-guide">
+          <strong>Como usar esta aba</strong>
+          <p>Acompanhe quantas unidades existem de cada item, principalmente refrigerantes, drinks e produtos prontos. Use + e - para ajustar rapido. Quando um pedido vira Entregue, o sistema baixa automaticamente o estoque dos itens vendidos.</p>
+        </div>
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Controle rapido</span>
+            <h1>Estoque</h1>
+            <p>Controle refrigerante, drinks e itens principais. Pedido entregue baixa automaticamente.</p>
+          </div>
+        </div>
+        <div class="stock-grid" id="stock-grid"></div>
+      </section>
+    </section>
+
+    <section class="admin-tab hidden" id="tab-dashboard">
+      <section class="panel">
+        <div class="tab-guide">
+          <strong>Como usar esta aba</strong>
+          <p>Veja o resultado real do caixa. So aparecem pedidos marcados como Entregue. Aqui voce acompanha faturamento, ticket medio, canais de venda, produtos mais vendidos e ultimos pedidos entregues.</p>
+        </div>
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Fechamento</span>
+            <h1>Dashboard</h1>
+            <p>Somente pedidos entregues entram aqui.</p>
+          </div>
+        </div>
+        <div class="dashboard-grid" id="dashboard-metrics"></div>
+        <div class="dashboard-columns">
+          <div class="chart-card">
+            <h2>Faturamento por canal</h2>
+            <div id="channel-chart"></div>
+          </div>
+          <div class="chart-card">
+            <h2>Mais vendidos</h2>
+            <div id="best-items"></div>
+          </div>
+          <div class="chart-card">
+            <h2>Ultimos pedidos entregues</h2>
+            <div id="completed-sales"></div>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <iframe class="print-frame" id="print-frame" title="Impressao"></iframe>
+  <div class="support-modal hidden" id="support-modal" role="dialog" aria-modal="true" aria-labelledby="support-title">
+    <div class="support-panel">
+      <div class="support-head">
+        <div>
+          <h2 id="support-title">Suporte Nexo</h2>
+          <p>Canais oficiais para atendimento, ajustes e informacoes da Nexo Developer.</p>
+        </div>
+        <button class="secondary" onclick="closeSupport()">Fechar</button>
+      </div>
+      <div class="support-hero">
+        <img src="images/nexo sem fundo.png" alt="Nexo Developer">
+        <div>
+          <h3>Suporte tecnico do sistema</h3>
+          <p>Use estes canais para tirar duvidas, solicitar ajustes ou acompanhar novas entregas.</p>
+        </div>
+      </div>
+      <div class="support-grid">
+        <div class="support-card">
+          <span>WhatsApp principal</span>
+          <strong>(21) 97094-6410</strong>
+          <p>Atendimento direto para suporte e ajustes do sistema.</p>
+          <a class="secondary" href="https://wa.me/5521970946410" target="_blank" rel="noopener">Chamar</a>
+        </div>
+        <div class="support-card">
+          <span>WhatsApp alternativo</span>
+          <strong>(21) 96956-5614</strong>
+          <p>Canal alternativo para contato quando necessario.</p>
+          <a class="secondary" href="https://wa.me/5521969565614" target="_blank" rel="noopener">Chamar</a>
+        </div>
+        <div class="support-card">
+          <span>Instagram</span>
+          <strong>@nexo.developer</strong>
+          <p>Projetos, novidades e atualizacoes da empresa.</p>
+          <a class="secondary" href="https://www.instagram.com/nexo.developer/" target="_blank" rel="noopener">Acessar</a>
+        </div>
+        <div class="support-card">
+          <span>E-mail</span>
+          <strong>solucaonexo.co@gmail.com</strong>
+          <p>Solicitacoes formais, escopos e informacoes complementares.</p>
+          <a class="secondary" href="mailto:solucaonexo.co@gmail.com">Enviar</a>
+        </div>
+        <div class="support-card">
+          <span>Portfolio</span>
+          <strong>Nexo Developer</strong>
+          <p>Conheca outros projetos e solucoes desenvolvidas.</p>
+          <a class="secondary" href="https://portfolio-nexo.netlify.app/" target="_blank" rel="noopener">Ver portfolio</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <footer class="nexo-footer">
+    Desenvolvido pela <a href="https://portfolio-nexo.netlify.app/" target="_blank" rel="noopener">Nexo Developer</a>
+  </footer>
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+  <script>initAdmin();</script>
+</body>
+</html>
