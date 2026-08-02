@@ -91,13 +91,14 @@
       <div class="menu-grid" id="menu"></div>
     </section>
 
-    <aside class="cart" id="cart">
+    <aside class="cart" id="cart" role="dialog" aria-modal="true" aria-label="Seu pedido">
       <div class="cart-head">
         <div>
           <span class="eyebrow">Checkout rapido</span>
           <h2>Seu pedido</h2>
         </div>
         <strong class="cart-count" id="cart-count">0</strong>
+        <button class="cart-close" type="button" onclick="closeCart()" aria-label="Fechar carrinho">×</button>
       </div>
 
       <div class="cart-items" id="cart-items"></div>
@@ -143,9 +144,10 @@
     </aside>
   </main>
 
-  <button class="mobile-cart" onclick="document.getElementById('cart').scrollIntoView({ behavior: 'smooth' })">
+  <button class="mobile-cart" onclick="openCart()">
     Ver pedido <strong>R$ <span id="mobile-total">0,00</span></strong>
   </button>
+  <button class="cart-backdrop" onclick="closeCart()" aria-label="Fechar carrinho"></button>
 
   <footer class="nexo-footer">
     Siga o <a href="https://www.instagram.com/baixok_/" target="_blank" rel="noopener">Baixo K no Instagram</a> · Desenvolvido pela <a href="https://portfolio-nexo.netlify.app/" target="_blank" rel="noopener">Nexo Developer</a>

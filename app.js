@@ -259,7 +259,14 @@ function addToCart(id) {
   else rows.push({ id: product.id, name: product.name, price: Number(product.price), qty: 1 });
   saveCart(rows);
   renderCart();
+  openCart();
   toast("Item adicionado ao pedido.");
+}
+function openCart() {
+  document.body.classList.add("cart-open");
+}
+function closeCart() {
+  document.body.classList.remove("cart-open");
 }
 function changeQty(id, delta) {
   let rows = cart();
@@ -340,6 +347,7 @@ function sendOrder() {
   const order = createOrder({ customer, phone, place, payment, note, channel: "cardapio", fulfillment: fulfillmentMode, items: rows, total: cartTotal() });
   if (fulfillmentMode === "entrega") openDeliveryWhatsapp(order);
   clearCart();
+  closeCart();
   ["customer-name", "customer-phone", "customer-place", "order-note"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("payment-method").value = "";
   toast(fulfillmentMode === "entrega" ? "Pedido enviado e WhatsApp aberto para entrega." : "Pedido enviado para a cozinha.");
@@ -374,18 +382,30 @@ function statusActions(order) {
   if (order.status === "pronto") return `<button class="primary" onclick="completeOrder('${order.id}')">Entregue</button>`;
   return "";
 }
-function orderCard(order) {
+function elapsedMinutes(value) {
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) return 0;
+  return Math.max(0, Math.floor((Date.now() - time) / 60000));
+}
+function byPriority(rows) {
+  return [...rows].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+}
+function orderCard(order, index = 0) {
   const pickup = order.fulfillment === "retirada";
+  const wait = elapsedMinutes(order.createdAt);
+  const priority = wait >= 30 ? "urgent" : wait >= 15 ? "attention" : "normal";
   return `
-    <article class="order-card status-${order.status}" draggable="true" ondragstart="dragOrder(event, '${order.id}')">
+    <article class="order-card status-${order.status} priority-${priority}" draggable="true" ondragstart="dragOrder(event, '${order.id}')">
       <div class="order-top">
         <strong>#${String(order.id).slice(-5)} - ${escapeHtml(order.customer)}</strong>
+        <span class="priority-badge">${index + 1}o da fila</span>
         <strong>R$ ${money(order.total)}</strong>
       </div>
       <div class="order-flags">
         <span class="flag ${pickup ? "pickup" : ""}">${escapeHtml(FULFILLMENT[order.fulfillment] || order.fulfillment)}</span>
         <span class="flag">${escapeHtml(CHANNELS[order.channel] || order.channel)}</span>
         <span class="flag">${escapeHtml(STATUS[order.status])}</span>
+        <span class="flag">${wait} min aguardando</span>
       </div>
       <p>${escapeHtml(order.place)}${order.phone ? ` | ${escapeHtml(order.phone)}` : ""}</p>
       <ul class="order-items">${order.items.map(item => `<li>${escapeHtml(item.qty)}x ${escapeHtml(item.name)}</li>`).join("")}</ul>
@@ -405,8 +425,8 @@ function renderOrdersKanban() {
   const orders = getOrders().filter(order => order.status !== "cancelado");
   const groups = ["novo", "preparo", "pronto", "entregue"];
   target.innerHTML = groups.map(status => {
-    const rows = orders.filter(order => order.status === status);
-    return `<div class="kanban-column status-zone-${status}" ondragover="allowOrderDrop(event)" ondrop="dropOrder(event, '${status}')"><h2>${STATUS[status]} <span>${rows.length}</span></h2>${rows.length ? rows.map(orderCard).join("") : "<p>Nenhum pedido aqui.</p>"}</div>`;
+    const rows = byPriority(orders.filter(order => order.status === status));
+    return `<div class="kanban-column status-zone-${status}" ondragover="allowOrderDrop(event)" ondrop="dropOrder(event, '${status}')"><h2>${STATUS[status]} <span>${rows.length}</span></h2>${rows.length ? rows.map((order, index) => orderCard(order, index)).join("") : "<p>Nenhum pedido aqui.</p>"}</div>`;
   }).join("");
 }
 function dragOrder(event, id) {
