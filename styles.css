@@ -211,7 +211,7 @@ p, label, .brand span { color: var(--muted); }
 .support-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
 .support-panel h2, .support-panel h3 { color: var(--gold); }
 .support-hero { display: flex; gap: 14px; align-items: center; margin: 14px 0; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: linear-gradient(135deg, rgba(243,198,107,.12), rgba(199,122,67,.08)); }
-.support-hero img { width: 92px; height: 64px; object-fit: contain; border-radius: 8px; background: #050403; }
+.support-hero img { width: 118px; height: 78px; padding: 10px; object-fit: contain; object-position: center; border-radius: 8px; background: #fff; }
 .support-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .support-card { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--soft); }
 .support-card span { color: var(--muted); }
