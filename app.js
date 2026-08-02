@@ -100,6 +100,15 @@ const activeProducts = () => getProducts().filter(product => product.active !== 
 const cart = () => JSON.parse(localStorage.getItem(CART_KEY) || "[]");
 const saveCart = rows => localStorage.setItem(CART_KEY, JSON.stringify(rows));
 const orderTotal = order => (order.items || []).reduce((sum, item) => sum + Number(item.price || 0) * Number(item.qty || 1), 0);
+const downloadBlob = (content, filename, type) => {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+};
 
 function toast(message) {
   const target = document.getElementById("toast");
@@ -562,6 +571,9 @@ function renderDashboard() {
   renderChannelChart(completed);
   renderBestItems(completed);
   renderCompletedSales(completed);
+  renderHourChart(completed);
+  renderCategoryChart(completed);
+  renderStockAlertChart();
 }
 function renderChannelChart(rows) {
   const target = document.getElementById("channel-chart");
@@ -590,34 +602,123 @@ function renderCompletedSales(rows) {
   if (!target) return;
   target.innerHTML = rows.slice(0, 10).map(order => `<div class="sale-line"><strong>${escapeHtml(order.customer)}</strong><span>${escapeHtml(CHANNELS[order.channel] || order.channel)} | ${localTime(order.completedAt || order.createdAt)}</span><em>R$ ${money(order.total)}</em></div>`).join("") || "<p>Sem pedidos entregues.</p>";
 }
+function renderHourChart(rows) {
+  const target = document.getElementById("hour-chart");
+  if (!target) return;
+  const grouped = {};
+  rows.forEach(order => {
+    const hour = new Date(order.completedAt || order.createdAt).getHours();
+    const label = `${String(hour).padStart(2, "0")}h`;
+    grouped[label] = (grouped[label] || 0) + Number(order.total || 0);
+  });
+  const entries = Object.entries(grouped).sort(([a], [b]) => Number(a.slice(0, 2)) - Number(b.slice(0, 2)));
+  target.innerHTML = chartRows(entries, value => `R$ ${money(value)}`) || "<p>Sem pedidos entregues.</p>";
+}
+function renderCategoryChart(rows) {
+  const target = document.getElementById("category-chart");
+  if (!target) return;
+  const products = getProducts();
+  const grouped = {};
+  rows.forEach(order => order.items.forEach(item => {
+    const product = products.find(row => row.id === item.id || row.name === item.name);
+    const category = CATEGORIES[product?.category] || "Outros";
+    grouped[category] = (grouped[category] || 0) + Number(item.price || 0) * Number(item.qty || 1);
+  }));
+  target.innerHTML = chartRows(Object.entries(grouped), value => `R$ ${money(value)}`) || "<p>Sem pedidos entregues.</p>";
+}
+function renderStockAlertChart() {
+  const target = document.getElementById("stock-alert-chart");
+  if (!target) return;
+  const rows = getProducts()
+    .filter(product => Number(product.stock || 0) <= Number(product.minStock || 0) || Number(product.stock || 0) <= 5)
+    .sort((a, b) => Number(a.stock || 0) - Number(b.stock || 0))
+    .slice(0, 8);
+  target.innerHTML = rows.map(product => `<div class="ranking"><strong>${product.stock}</strong><span>${escapeHtml(product.name)}</span><em>min. ${product.minStock || 4}</em></div>`).join("") || "<p>Nenhum item critico.</p>";
+}
+function chartRows(entries, formatValue) {
+  const max = Math.max(...entries.map(([, value]) => Number(value || 0)), 1);
+  return entries.map(([label, value]) => `<div class="chart-row"><span>${escapeHtml(label)}</span><div><i style="width:${Math.max(4, Number(value || 0) / max * 100)}%"></i></div><strong>${formatValue(value)}</strong></div>`).join("");
+}
+function exportDashboardExcel() {
+  const completed = getOrders().filter(order => order.status === "entregue");
+  const products = getProducts();
+  const sales = completed.map(order => ({
+    Pedido: String(order.id).slice(-5),
+    Cliente: order.customer,
+    Canal: CHANNELS[order.channel] || order.channel,
+    Tipo: FULFILLMENT[order.fulfillment] || order.fulfillment,
+    Local: order.place,
+    Pagamento: order.payment,
+    Total: Number(order.total || 0),
+    Criado: localTime(order.createdAt),
+    Entregue: localTime(order.completedAt || order.createdAt),
+    Itens: order.items.map(item => `${item.qty}x ${item.name}`).join(" | "),
+    Observacao: order.note || ""
+  }));
+  const items = [];
+  completed.forEach(order => order.items.forEach(item => items.push({
+    Pedido: String(order.id).slice(-5),
+    Produto: item.name,
+    Quantidade: Number(item.qty || 1),
+    ValorUnitario: Number(item.price || 0),
+    TotalItem: Number(item.price || 0) * Number(item.qty || 1),
+    Canal: CHANNELS[order.channel] || order.channel,
+    Entregue: localTime(order.completedAt || order.createdAt)
+  })));
+  const stock = products.map(product => ({
+    Produto: product.name,
+    Categoria: CATEGORIES[product.category] || product.category,
+    Estoque: Number(product.stock || 0),
+    Minimo: Number(product.minStock || 0),
+    Ativo: product.active !== false ? "Sim" : "Nao",
+    Preco: Number(product.price || 0)
+  }));
+  if (window.XLSX) {
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(sales), "Vendas");
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(items), "Itens");
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(stock), "Estoque");
+    XLSX.writeFile(workbook, `baixo-k-dashboard-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast("Excel exportado.");
+    return;
+  }
+  const html = `<html><head><meta charset="utf-8"></head><body><table>${Object.keys(sales[0] || { Pedido: "" }).map(key => `<th>${key}</th>`).join("")}${sales.map(row => `<tr>${Object.values(row).map(value => `<td>${escapeHtml(value)}</td>`).join("")}</tr>`).join("")}</table></body></html>`;
+  downloadBlob(html, `baixo-k-dashboard-${new Date().toISOString().slice(0, 10)}.xls`, "application/vnd.ms-excel;charset=utf-8");
+  toast("Exportado em .xls porque a biblioteca XLSX nao carregou.");
+}
 
 function buildReceipt(order, type) {
   const kitchen = type === "kitchen";
   const items = order.items.map(item => `
     <div class="item">
-      <div><strong>${escapeHtml(item.qty)}x ${escapeHtml(item.name)}</strong></div>
+      <div><strong>${escapeHtml(item.qty)}x ${escapeHtml(item.name)}</strong>${item.note ? `<small>${escapeHtml(item.note)}</small>` : ""}</div>
       ${kitchen ? "" : `<span>R$ ${money(item.price * item.qty)}</span>`}
     </div>
   `).join("");
   return `<!doctype html>
   <html><head><meta charset="utf-8"><title>Baixo K</title>
   <style>
-    @page { size: 80mm auto; margin: 3mm; }
+    @page { size: 80mm auto; margin: 2mm; }
     * { box-sizing: border-box; }
-    body { width: 74mm; margin: 0; color: #000; background: #fff; font-family: Arial, sans-serif; font-size: ${kitchen ? "18px" : "13px"}; font-weight: 500; }
+    body { width: 76mm; margin: 0; color: #000; background: #fff; font-family: Arial, sans-serif; font-size: ${kitchen ? "18px" : "13px"}; font-weight: 500; }
     h1,h2,p { margin: 0; }
     .brand { text-align: center; padding-bottom: 6px; border-bottom: 2px solid #000; }
     .brand h1 { font-size: ${kitchen ? "28px" : "20px"}; letter-spacing: 0; }
     .brand p { margin-top: 2px; font-size: 11px; }
-    .ticket-type { margin: 7px 0; padding: 6px 4px; border: 2px solid #000; text-align: center; font-size: ${kitchen ? "24px" : "16px"}; font-weight: 900; }
-    .pickup { margin: 7px 0; padding: 7px 4px; color: #fff; background: #000; text-align: center; font-size: 24px; font-weight: 900; }
+    .ticket-type { margin: 7px 0; padding: 6px 4px; border: 2px solid #000; text-align: center; font-size: ${kitchen ? "26px" : "16px"}; font-weight: 900; }
+    .pickup { margin: 7px 0; padding: 7px 4px; color: #fff; background: #000; text-align: center; font-size: ${kitchen ? "28px" : "24px"}; font-weight: 900; }
     .meta, .totals, .obs { padding: 7px 0; border-top: 1px dashed #000; }
     .meta p, .line { display: flex; justify-content: space-between; gap: 7px; padding: 2px 0; }
+    .meta strong { text-align: right; }
     .big-code { display: block; text-align: center; font-size: ${kitchen ? "34px" : "24px"}; font-weight: 900; }
-    .item { display: grid; grid-template-columns: minmax(0,1fr) ${kitchen ? "0" : "62px"}; gap: 6px; padding: ${kitchen ? "8px 0" : "5px 0"}; border-top: 1px solid #ddd; }
-    .item strong { font-size: ${kitchen ? "21px" : "14px"}; }
+    .customer { margin: 7px 0; padding: 7px 4px; border: 2px solid #000; text-align: center; font-size: ${kitchen ? "24px" : "16px"}; font-weight: 900; }
+    .item { display: grid; grid-template-columns: minmax(0,1fr) ${kitchen ? "0" : "62px"}; gap: 6px; padding: ${kitchen ? "10px 0" : "5px 0"}; border-top: 1px solid #000; }
+    .item strong { display: block; font-size: ${kitchen ? "23px" : "14px"}; line-height: 1.18; }
+    .item small { display: block; margin-top: 3px; font-size: 14px; font-weight: 800; }
     .item span { text-align: right; font-weight: 800; }
-    .obs strong { display: block; margin-bottom: 4px; font-size: ${kitchen ? "18px" : "13px"}; }
+    .obs { border: 2px solid #000; margin-top: 8px; padding: 7px; }
+    .obs strong { display: block; margin-bottom: 4px; font-size: ${kitchen ? "20px" : "13px"}; }
+    .obs p { font-size: ${kitchen ? "19px" : "13px"}; font-weight: 900; }
     strong, p, div { overflow-wrap: anywhere; }
     .cut { margin-top: 10px; text-align: center; font-size: 12px; }
   </style></head>
@@ -626,10 +727,13 @@ function buildReceipt(order, type) {
     <div class="ticket-type">${kitchen ? "COZINHA" : "BALCAO"}</div>
     <strong class="big-code">#${String(order.id).slice(-5)}</strong>
     ${order.fulfillment === "retirada" ? `<div class="pickup">RETIRADA</div>` : ""}
+    <div class="customer">${escapeHtml(order.customer || "CLIENTE")}</div>
     <div class="meta">
       <p><span>Canal</span><strong>${escapeHtml(CHANNELS[order.channel] || order.channel)}</strong></p>
+      <p><span>Tipo</span><strong>${escapeHtml(FULFILLMENT[order.fulfillment] || order.fulfillment)}</strong></p>
       <p><span>Horario</span><strong>${localTime(order.createdAt)}</strong></p>
-      ${kitchen ? "" : `<p><span>Cliente</span><strong>${escapeHtml(order.customer)}</strong></p><p><span>Local</span><strong>${escapeHtml(order.place)}</strong></p>`}
+      <p><span>Local</span><strong>${escapeHtml(order.place)}</strong></p>
+      ${order.phone ? `<p><span>Telefone</span><strong>${escapeHtml(order.phone)}</strong></p>` : ""}
     </div>
     ${items}
     ${order.note ? `<div class="obs"><strong>OBSERVACAO</strong><p>${escapeHtml(order.note)}</p></div>` : ""}

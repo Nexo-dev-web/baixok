@@ -215,6 +215,7 @@
             <h1>Dashboard</h1>
             <p>Somente pedidos entregues entram aqui.</p>
           </div>
+          <button class="primary" onclick="exportDashboardExcel()">Exportar Excel</button>
         </div>
         <div class="dashboard-grid" id="dashboard-metrics"></div>
         <div class="dashboard-columns">
@@ -229,6 +230,18 @@
           <div class="chart-card">
             <h2>Ultimos pedidos entregues</h2>
             <div id="completed-sales"></div>
+          </div>
+          <div class="chart-card">
+            <h2>Vendas por horario</h2>
+            <div id="hour-chart"></div>
+          </div>
+          <div class="chart-card">
+            <h2>Faturamento por categoria</h2>
+            <div id="category-chart"></div>
+          </div>
+          <div class="chart-card">
+            <h2>Estoque critico</h2>
+            <div id="stock-alert-chart"></div>
           </div>
         </div>
       </section>
@@ -290,6 +303,7 @@
     Instagram <a href="https://www.instagram.com/baixok_/" target="_blank" rel="noopener">@baixok_</a> · Desenvolvido pela <a href="https://portfolio-nexo.netlify.app/" target="_blank" rel="noopener">Nexo Developer</a>
   </footer>
   <div class="toast" id="toast"></div>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="app.js"></script>
   <script>initAdmin();</script>
 </body>
