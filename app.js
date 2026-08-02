@@ -244,9 +244,13 @@ function setFulfillment(mode) {
   const banner = document.getElementById("pickup-banner");
   const label = document.getElementById("place-label");
   const place = document.getElementById("customer-place");
-  if (banner) banner.textContent = mode === "retirada" ? "RETIRADA NO BALCAO" : "ENTREGA";
-  if (label) label.firstChild.textContent = mode === "retirada" ? "Retirada" : "Endereco de entrega";
-  if (place) place.placeholder = mode === "retirada" ? "Ex: Retirada no balcao" : "Endereco completo";
+  if (banner) banner.textContent = mode === "retirada" ? "RETIRADA" : "ENTREGA";
+  if (label) label.classList.toggle("hidden", mode === "retirada");
+  if (label) label.firstChild.textContent = "Endereco de entrega";
+  if (place) {
+    place.placeholder = "Endereco completo";
+    if (mode === "retirada") place.value = "";
+  }
 }
 function addToCart(id) {
   const product = getProducts().find(item => item.id === id);
@@ -342,8 +346,8 @@ function sendOrder() {
   const placeValue = document.getElementById("customer-place").value.trim();
   const payment = document.getElementById("payment-method").value;
   const note = document.getElementById("order-note").value.trim();
-  const place = fulfillmentMode === "retirada" ? (placeValue || "Retirada no balcao") : placeValue;
-  if (!customer || !place || !payment) return alert("Preencha cliente, local e pagamento.");
+  const place = fulfillmentMode === "retirada" ? "Retirada" : placeValue;
+  if (!customer || !payment || (fulfillmentMode === "entrega" && !placeValue)) return alert(fulfillmentMode === "entrega" ? "Preencha cliente, endereco e pagamento." : "Preencha cliente e pagamento.");
   const order = createOrder({ customer, phone, place, payment, note, channel: "cardapio", fulfillment: fulfillmentMode, items: rows, total: cartTotal() });
   if (fulfillmentMode === "entrega") openDeliveryWhatsapp(order);
   clearCart();
