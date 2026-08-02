@@ -8,18 +8,18 @@
   <meta property="og:title" content="Baixo K - Sistema">
   <meta property="og:description" content="Painel operacional do Baixo K.">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="https://nexo-dev-web.github.io/baixok/images/baixok-logo-simples.jpg">
+  <meta property="og:image" content="https://nexo-dev-web.github.io/baixok/images/baixok-logo-v2.png">
   <meta name="twitter:card" content="summary">
   <meta name="theme-color" content="#f3c66b">
-  <link rel="icon" href="images/baixok-logo-simples.jpg">
-  <link rel="apple-touch-icon" href="images/baixok-logo-simples.jpg">
+  <link rel="icon" href="images/baixok-logo-v2.png">
+  <link rel="apple-touch-icon" href="images/baixok-logo-v2.png">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body data-page="admin">
   <header class="topbar">
     <div class="brand">
-      <img src="images/baixok-logo-simples.jpg" alt="Baixo K">
+      <img src="images/baixok-logo-v2.png" alt="Baixo K">
       <div>
         <strong>Baixo K</strong>
         <span>Sistema operacional</span>
@@ -184,7 +184,8 @@
             <span>Escolha uma foto do PC/celular ou tire na hora pela camera.</span>
           </label>
           <div class="product-photo-preview">
-            <img id="product-photo-preview" src="images/produto-pizza.png" alt="Preview da foto">
+            <img class="hidden" id="product-photo-preview" src="" alt="Preview da foto">
+            <span class="photo-empty">Sem foto cadastrada</span>
           </div>
           <label class="wide-field">Descricao <input id="product-description" required placeholder="Descricao curta do item"></label>
           <div class="form-actions">
@@ -254,6 +255,10 @@
             <h2>Estoque critico</h2>
             <div id="stock-alert-chart"></div>
           </div>
+        </div>
+        <div class="chart-card all-orders-card">
+          <h2>Todos os pedidos</h2>
+          <div id="all-orders-dashboard"></div>
         </div>
       </section>
     </section>

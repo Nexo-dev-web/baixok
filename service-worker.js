@@ -1,4 +1,4 @@
-const CACHE_NAME = "baixo-k-v2";
+const CACHE_NAME = "baixo-k-v3";
 const ASSETS = [
   "./",
   "./index.html",
@@ -7,7 +7,7 @@ const ASSETS = [
   "./styles.css",
   "./app.js",
   "./manifest.webmanifest",
-  "./images/baixok-logo-simples.jpg",
+  "./images/baixok-logo-v2.png",
   "./images/loja-baixo-k-hero.png",
   "./images/produto-pizza.png",
   "./images/produto-burguer.png",

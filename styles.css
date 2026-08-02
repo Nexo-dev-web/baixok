@@ -62,6 +62,7 @@ p, label, .brand span { color: var(--muted); }
 .signature-strip article { position: relative; min-height: 210px; overflow: hidden; border: 1px solid rgba(243,198,107,.24); border-radius: 8px; background: #0b0705; box-shadow: var(--shadow); cursor: pointer; }
 .signature-strip article:hover { border-color: rgba(243,198,107,.58); transform: translateY(-2px); transition: .18s ease; }
 .signature-strip img { width: 100%; height: 100%; min-height: 210px; object-fit: contain; background: radial-gradient(circle at center, rgba(243,198,107,.08), #050403 72%); filter: saturate(1.06) contrast(1.02); }
+.signature-strip .no-photo { width: 100%; height: 100%; min-height: 210px; }
 .signature-strip article::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 28%, rgba(0,0,0,.86)); }
 .signature-strip div { position: absolute; left: 14px; right: 14px; bottom: 14px; z-index: 1; display: grid; gap: 4px; }
 .signature-strip span { color: var(--gold); font-size: .78rem; font-weight: 1000; text-transform: uppercase; }
@@ -96,7 +97,10 @@ p, label, .brand span { color: var(--muted); }
 .product::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, transparent 38%, rgba(0,0,0,.45)); opacity: .8; }
 .product:hover { transform: translateY(-3px); border-color: rgba(243,198,107,.55); box-shadow: 0 24px 60px rgba(0,0,0,.42); }
 .product .badge { position: absolute; top: 10px; left: 10px; z-index: 2; }
-.product img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: radial-gradient(circle at center, rgba(243,198,107,.08), #080605 72%); filter: saturate(1.08) contrast(1.02); }
+.product img, .product .no-photo { width: 100%; aspect-ratio: 4 / 3; }
+.product img { object-fit: contain; background: radial-gradient(circle at center, rgba(243,198,107,.08), #080605 72%); filter: saturate(1.08) contrast(1.02); }
+.no-photo { display: grid; place-items: center; padding: 14px; color: var(--gold); background: repeating-linear-gradient(135deg, rgba(243,198,107,.08) 0 10px, rgba(255,255,255,.03) 10px 20px), #080605; text-align: center; font-weight: 1000; }
+.no-photo small { color: var(--muted); font-size: .78rem; font-weight: 800; }
 .product-body { position: relative; z-index: 1; display: grid; gap: 8px; padding: 14px; }
 .product strong { color: var(--gold); font-size: 1.12rem; }
 .product .price-row span { color: var(--ink); font-size: 1.15rem; font-weight: 1000; }
@@ -160,7 +164,9 @@ p, label, .brand span { color: var(--muted); }
 .manual-product-list { display: grid; gap: 8px; max-height: 560px; overflow: auto; }
 .manual-product { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--soft); text-align: left; transition: transform .16s ease, border-color .16s ease; }
 .manual-product:hover { transform: translateY(-1px); border-color: rgba(243,198,107,.48); }
-.manual-product img { width: 74px; height: 64px; object-fit: contain; border-radius: 8px; background: #080605; }
+.manual-product img, .manual-product .no-photo { width: 74px; height: 64px; border-radius: 8px; }
+.manual-product img { object-fit: contain; background: #080605; }
+.manual-product .no-photo { font-size: .72rem; }
 .manual-product strong { display: block; color: var(--gold); }
 .manual-product span { display: grid; gap: 3px; color: var(--muted); }
 .manual-product em { color: var(--muted); font-style: normal; }
@@ -172,13 +178,16 @@ p, label, .brand span { color: var(--muted); }
 .photo-field span { color: var(--muted); font-size: .86rem; line-height: 1.35; }
 .product-photo-preview { display: grid; place-items: center; min-height: 132px; border: 1px dashed rgba(243,198,107,.32); border-radius: 8px; background: rgba(255,255,255,.04); overflow: hidden; }
 .product-photo-preview img { width: 100%; height: 132px; object-fit: cover; }
+.product-photo-preview .photo-empty { display: block; color: var(--muted); font-size: .86rem; }
 .form-actions { display: flex; align-items: end; gap: 8px; flex-wrap: wrap; }
 .check-field { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; }
 .check-field input { width: 18px; min-height: 18px; accent-color: var(--gold); }
 .product-admin-list { display: grid; gap: 10px; }
 .product-admin { display: grid; grid-template-columns: 82px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--soft); }
 .product-admin.paused { opacity: .62; border-style: dashed; }
-.product-admin img { width: 82px; height: 82px; object-fit: contain; border-radius: 8px; background: #080605; }
+.product-admin img, .product-admin .no-photo { width: 82px; height: 82px; border-radius: 8px; }
+.product-admin img { object-fit: contain; background: #080605; }
+.product-admin .no-photo { font-size: .72rem; }
 .product-admin strong { display: block; color: var(--gold); }
 .product-admin span, .product-admin p { display: block; margin-top: 4px; }
 .stock-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
@@ -199,6 +208,9 @@ p, label, .brand span { color: var(--muted); }
 .sale-line { grid-template-columns: minmax(0, 1fr) auto; }
 .sale-line strong, .ranking span { color: var(--ink); }
 .sale-line em, .ranking em { color: var(--gold); font-style: normal; font-weight: 900; }
+.all-orders-card { margin-top: 14px; }
+.dashboard-order-line { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.04); }
+.dashboard-order-line span, .dashboard-order-line em { display: block; margin-top: 4px; color: var(--muted); font-style: normal; }
 .mobile-cart { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 12; display: none; justify-content: space-between; align-items: center; min-height: 52px; padding: 0 16px; border-radius: 8px; color: #170d08; background: var(--gold); font-weight: 1000; box-shadow: var(--shadow); }
 .nexo-footer { padding: 22px 14px 30px; color: rgba(255,248,236,.58); text-align: center; font-size: .86rem; }
 .nexo-footer a { color: var(--gold); font-weight: 900; text-decoration: none; }
@@ -219,8 +231,6 @@ p, label, .brand span { color: var(--muted); }
 .screen-page { min-height: 100vh; padding: 26px clamp(22px, 4vw, 64px); background: linear-gradient(90deg, rgba(5,3,2,.92), rgba(13,8,5,.74)), url("images/loja-baixo-k-hero.png") center/cover fixed; }
 .screen-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 24px; }
 .screen-clock { color: var(--gold); font-size: clamp(2rem, 5vw, 4rem); font-weight: 1000; }
-.sound-toggle { position: fixed; top: 118px; right: clamp(22px, 4vw, 64px); z-index: 5; min-height: 38px; padding: 0 12px; border: 1px solid rgba(243,198,107,.32); border-radius: 999px; color: var(--ink); background: rgba(0,0,0,.34); font-weight: 1000; backdrop-filter: blur(8px); }
-.sound-toggle.active { color: #170d08; background: var(--gold); }
 .screen-highlight { min-height: 280px; display: grid; align-content: center; gap: 12px; padding: clamp(24px, 4vw, 42px); border: 1px solid rgba(243,198,107,.42); border-radius: 8px; background: linear-gradient(135deg, rgba(243,198,107,.18), rgba(199,122,67,.09)), rgba(14,9,6,.86); box-shadow: var(--shadow); backdrop-filter: blur(10px); animation: screenRise .5s ease both; }
 .screen-highlight strong { color: var(--gold); font-size: clamp(2.8rem, 8vw, 7rem); line-height: .95; }
 .screen-highlight p { font-size: clamp(1.2rem, 2.2vw, 2rem); }
@@ -278,7 +288,6 @@ p, label, .brand span { color: var(--muted); }
   .product-body .primary { min-height: 44px; padding: 0 12px; }
   .screen-page { padding: 18px 12px; }
   .screen-header { align-items: flex-start; flex-direction: column; }
-  .sound-toggle { top: 18px; right: 12px; }
   .screen-highlight { min-height: 220px; }
   .support-grid { grid-template-columns: 1fr; }
   .support-head, .support-hero { flex-direction: column; }

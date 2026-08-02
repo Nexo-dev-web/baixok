@@ -1,6 +1,6 @@
 const DB_KEY = "baixoKSystem.v1";
 const CART_KEY = "baixoKCart.v1";
-const ACTIVE_LOGO = "images/baixok-logo-simples.jpg";
+const ACTIVE_LOGO = "images/baixok-logo-v2.png";
 const CATEGORY_IMAGES = {
   pizzas: "images/produto-pizza.png",
   burgues: "images/produto-burguer.png",
@@ -86,13 +86,28 @@ const saveProducts = products => {
   saveDb(data);
 };
 const productImage = product => {
-  if (!product?.image || product.image === ACTIVE_LOGO) return CATEGORY_IMAGES[product.category] || ACTIVE_LOGO;
+  if (!product?.image || product.image === "images/baixok-logo-simples.jpg") return "";
   return product.image;
 };
+const productImageMarkup = (product, alt = "") => {
+  const src = productImage(product);
+  if (!src) return `<div class="no-photo">Sem foto<br><small>Cadastre no painel</small></div>`;
+  return `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt || product.name || "")}" loading="lazy" decoding="async" onerror="this.replaceWith(noPhotoNode())">`;
+};
+function noPhotoNode() {
+  const node = document.createElement("div");
+  node.className = "no-photo";
+  node.innerHTML = "Sem foto<br><small>Cadastre no painel</small>";
+  return node;
+}
 const updateProductPhotoPreview = value => {
   const preview = document.getElementById("product-photo-preview");
-  const category = document.getElementById("product-category")?.value || "pizzas";
-  if (preview) preview.src = value || CATEGORY_IMAGES[category] || ACTIVE_LOGO;
+  const empty = document.querySelector(".product-photo-preview .photo-empty");
+  if (preview) {
+    preview.src = value || "";
+    preview.classList.toggle("hidden", !value);
+  }
+  if (empty) empty.classList.toggle("hidden", Boolean(value));
 };
 const saveOrders = orders => {
   const data = db();
@@ -177,7 +192,7 @@ function renderSignatureProducts() {
   const rows = signatureProducts();
   target.innerHTML = rows.length ? rows.map((product, index) => `
     <article onclick="setCategory('${product.category}'); document.getElementById('menu-shell')?.scrollIntoView({ behavior: 'smooth' })">
-      <img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product.name)}" loading="lazy" decoding="async">
+      ${productImageMarkup(product)}
       <div>
         <span>${escapeHtml(product.badge || labels[index] || CATEGORIES[product.category] || "Destaque")}</span>
         <strong>${escapeHtml(product.name)}</strong>
@@ -208,7 +223,7 @@ function renderMenu() {
   target.innerHTML = list.length ? list.map(product => `
     <article class="product">
       <span class="badge">${escapeHtml(product.badge || CATEGORIES[product.category] || "Item")}</span>
-      <img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product.name)}" loading="lazy" decoding="async">
+      ${productImageMarkup(product)}
       <div class="product-body">
         <strong>${escapeHtml(product.name)}</strong>
         <p>${escapeHtml(product.description)}</p>
@@ -432,7 +447,7 @@ function renderManualProducts() {
   const products = activeProducts().filter(product => `${product.name} ${product.category}`.toLowerCase().includes(search));
   target.innerHTML = products.map(product => `
     <button class="manual-product" onclick="addManualItem('${product.id}')">
-      <img src="${escapeHtml(productImage(product))}" alt="" loading="lazy" decoding="async">
+      ${productImageMarkup(product)}
       <span>
         <strong>${escapeHtml(product.name)}</strong>
         <em>R$ ${money(product.price)} | ${product.stock} em estoque</em>
@@ -498,7 +513,7 @@ function saveProductForm(event) {
     stock: Number(document.getElementById("product-stock").value || 0),
     minStock: Number(current?.minStock ?? 4),
     active: document.getElementById("product-active").checked,
-    image: document.getElementById("product-image").value.trim() || CATEGORY_IMAGES[document.getElementById("product-category").value] || ACTIVE_LOGO,
+    image: document.getElementById("product-image").value.trim(),
     badge: CATEGORIES[document.getElementById("product-category").value] || "Item",
     description: document.getElementById("product-description").value.trim()
   };
@@ -539,7 +554,7 @@ function editProduct(id) {
   document.getElementById("product-category").value = product.category;
   document.getElementById("product-price").value = product.price;
   document.getElementById("product-stock").value = product.stock;
-  document.getElementById("product-image").value = product.image || ACTIVE_LOGO;
+  document.getElementById("product-image").value = product.image || "";
   document.getElementById("product-description").value = product.description;
   document.getElementById("product-active").checked = product.active !== false;
   updateProductPhotoPreview(productImage(product));
@@ -551,7 +566,7 @@ function resetProductForm() {
   if (file) file.value = "";
   document.getElementById("product-category").value = "pizzas";
   document.getElementById("product-active").checked = true;
-  updateProductPhotoPreview(CATEGORY_IMAGES.pizzas);
+  updateProductPhotoPreview("");
 }
 function toggleProduct(id) {
   saveProducts(getProducts().map(product => product.id === id ? { ...product, active: product.active === false } : product));
@@ -561,7 +576,7 @@ function renderProductsAdmin() {
   if (!target) return;
   target.innerHTML = getProducts().map(product => `
     <article class="product-admin ${product.active === false ? "paused" : ""}">
-      <img src="${escapeHtml(productImage(product))}" alt="" loading="lazy" decoding="async">
+      ${productImageMarkup(product)}
       <div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(CATEGORIES[product.category])} | R$ ${money(product.price)} | Estoque ${product.stock}</span><p>${escapeHtml(product.description)}</p></div>
       <div class="order-actions"><button class="secondary" onclick="editProduct('${product.id}')">Editar</button><button class="secondary" onclick="toggleProduct('${product.id}')">${product.active === false ? "Ativar" : "Pausar"}</button></div>
     </article>
@@ -597,6 +612,7 @@ function renderDashboard() {
   renderHourChart(completed);
   renderCategoryChart(completed);
   renderStockAlertChart();
+  renderAllOrdersDashboard();
 }
 function renderChannelChart(rows) {
   const target = document.getElementById("channel-chart");
@@ -657,6 +673,25 @@ function renderStockAlertChart() {
     .sort((a, b) => Number(a.stock || 0) - Number(b.stock || 0))
     .slice(0, 8);
   target.innerHTML = rows.map(product => `<div class="ranking"><strong>${product.stock}</strong><span>${escapeHtml(product.name)}</span><em>min. ${product.minStock || 4}</em></div>`).join("") || "<p>Nenhum item critico.</p>";
+}
+function renderAllOrdersDashboard() {
+  const target = document.getElementById("all-orders-dashboard");
+  if (!target) return;
+  const orders = getOrders();
+  target.innerHTML = orders.length ? orders.map(order => `
+    <div class="dashboard-order-line">
+      <div>
+        <strong>#${String(order.id).slice(-5)} - ${escapeHtml(order.customer)}</strong>
+        <span>${escapeHtml(STATUS[order.status] || order.status)} | ${escapeHtml(CHANNELS[order.channel] || order.channel)} | ${localTime(order.completedAt || order.createdAt)}</span>
+        <em>${order.items.map(item => `${item.qty}x ${escapeHtml(item.name)}`).join(" | ")}</em>
+      </div>
+      <strong>R$ ${money(order.total)}</strong>
+      <div class="print-actions">
+        <button class="secondary" onclick="printOrder('${order.id}', 'kitchen')">Cozinha</button>
+        <button class="secondary" onclick="printOrder('${order.id}', 'counter')">Balcao</button>
+      </div>
+    </div>
+  `).join("") : "<p>Nenhum pedido registrado.</p>";
 }
 function chartRows(entries, formatValue) {
   const max = Math.max(...entries.map(([, value]) => Number(value || 0)), 1);
@@ -787,37 +822,36 @@ function printTest(type) {
 }
 
 function initScreen() {
+  tryEnableScreenSound();
+  ["click", "touchstart", "keydown"].forEach(eventName => {
+    window.addEventListener(eventName, tryEnableScreenSound, { once: true, passive: true });
+  });
   renderScreen();
   setInterval(renderScreen, SCREEN_REFRESH_MS);
   window.addEventListener("storage", renderScreen);
   window.addEventListener("baixoKDataChanged", renderScreen);
 }
-function enableScreenSound() {
+function tryEnableScreenSound() {
+  if (!window.AudioContext && !window.webkitAudioContext) return;
   screenAudioContext = screenAudioContext || new (window.AudioContext || window.webkitAudioContext)();
-  screenAudioContext.resume();
+  screenAudioContext.resume().catch(() => {});
   screenSoundEnabled = true;
-  playScreenSound();
-  const button = document.getElementById("sound-toggle");
-  if (button) {
-    button.textContent = "Som ativo";
-    button.classList.add("active");
-  }
 }
 function playScreenSound() {
   if (!screenSoundEnabled || !screenAudioContext) return;
   const now = screenAudioContext.currentTime;
-  [0, .14, .28].forEach((offset, index) => {
+  [0, .18, .36, .62].forEach((offset, index) => {
     const osc = screenAudioContext.createOscillator();
     const gain = screenAudioContext.createGain();
-    osc.type = "sine";
-    osc.frequency.value = [880, 1174, 1568][index];
+    osc.type = index === 3 ? "triangle" : "sine";
+    osc.frequency.value = [659, 880, 1174, 880][index];
     gain.gain.setValueAtTime(0.001, now + offset);
-    gain.gain.exponentialRampToValueAtTime(0.22, now + offset + .02);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + offset + .12);
+    gain.gain.exponentialRampToValueAtTime(index === 3 ? 0.09 : 0.18, now + offset + .03);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + offset + (index === 3 ? .42 : .16));
     osc.connect(gain);
     gain.connect(screenAudioContext.destination);
     osc.start(now + offset);
-    osc.stop(now + offset + .14);
+    osc.stop(now + offset + (index === 3 ? .46 : .18));
   });
 }
 function renderScreen() {
