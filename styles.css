@@ -204,7 +204,7 @@ p, label, .brand span { color: var(--muted); }
 .nexo-footer a { color: var(--gold); font-weight: 900; text-decoration: none; }
 .nexo-footer a:hover { text-decoration: underline; }
 .screen-footer { position: fixed; left: 0; right: 0; bottom: 4px; display: flex; align-items: center; justify-content: center; gap: 16px; padding: 6px; background: transparent; }
-.screen-instagram { padding: 5px 9px; border: 1px solid rgba(243,198,107,.28); border-radius: 999px; background: rgba(0,0,0,.22); }
+.screen-instagram { padding: 6px 12px; border: 1px solid rgba(243,198,107,.36); border-radius: 999px; color: var(--gold) !important; background: rgba(0,0,0,.34); font-size: .95rem; letter-spacing: 0; }
 .support-modal { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 18px; background: rgba(0,0,0,.64); }
 .support-modal.hidden { display: none; }
 .support-panel { width: min(920px, 100%); max-height: 88vh; overflow: auto; padding: 20px; border: 1px solid rgba(243,198,107,.24); border-top: 5px solid var(--gold); border-radius: 8px; background: var(--panel); box-shadow: 0 28px 90px rgba(0,0,0,.58); }
