@@ -250,6 +250,7 @@ body.cart-open .mobile-cart { opacity: 0; pointer-events: none; transform: trans
 .screen-card.ready { border-color: rgba(23,180,103,.72); background: rgba(23,180,103,.14); }
 .screen-card strong { color: var(--ink); font-size: clamp(1.6rem, 3vw, 3rem); }
 .screen-card span { color: var(--gold); font-weight: 900; }
+.screen-card .screen-order-code { width: max-content; max-width: 100%; padding: 6px 10px; border-radius: 999px; color: #170d08; background: var(--gold); font-size: clamp(.82rem, 1.4vw, 1.05rem); text-transform: uppercase; }
 .screen-empty { padding: 18px; border: 1px dashed var(--line); border-radius: 8px; }
 .screen-pulse .screen-highlight { animation: screenPop .9s ease both; }
 @keyframes screenRise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }

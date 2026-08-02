@@ -86,6 +86,20 @@ const saveProducts = products => {
   data.products = products;
   saveDb(data);
 };
+function localDateKey(value) {
+  return new Date(value).toLocaleDateString("pt-BR");
+}
+function orderQueueNumber(order, orders = getOrders()) {
+  const day = localDateKey(order.createdAt);
+  const rows = orders
+    .filter(item => item.createdAt && localDateKey(item.createdAt) === day)
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  const index = rows.findIndex(item => item.id === order.id);
+  return String(index >= 0 ? index + 1 : rows.length + 1).padStart(3, "0");
+}
+function orderQueueLabel(order, orders = getOrders()) {
+  return `Pedido ${orderQueueNumber(order, orders)}`;
+}
 const productImage = product => {
   if (!product?.image || product.image === "images/baixok-logo-simples.jpg") return "";
   return product.image;
@@ -919,7 +933,7 @@ function renderScreen() {
   }
   document.getElementById("screen-highlight").innerHTML = newest ? `
     <span class="eyebrow">Pedido em destaque</span>
-    <strong>#${String(newest.id).slice(-5)} - ${escapeHtml(newest.customer)}</strong>
+    <strong>${orderQueueLabel(newest, orders)} - ${escapeHtml(newest.customer)}</strong>
     <p>${escapeHtml(FULFILLMENT[newest.fulfillment] || newest.fulfillment)} | ${escapeHtml(STATUS[newest.status])}</p>
     <ul>${newest.items.map(item => `<li>${escapeHtml(item.qty)}x ${escapeHtml(item.name)}</li>`).join("")}</ul>
   ` : `<span class="eyebrow">Baixo K</span><strong>Sem pedidos abertos</strong><p>Aguardando novos pedidos.</p>`;
@@ -927,7 +941,8 @@ function renderScreen() {
   document.getElementById("screen-ready").innerHTML = screenCards(active.filter(order => order.status === "pronto"));
 }
 function screenCards(rows) {
-  return rows.length ? rows.map(order => `<article class="screen-card ${order.status === "pronto" ? "ready" : ""}"><strong>${escapeHtml(order.customer)}</strong><span>#${String(order.id).slice(-5)} | ${escapeHtml(FULFILLMENT[order.fulfillment] || order.fulfillment)}</span><p>${order.items.map(item => `${item.qty}x ${escapeHtml(item.name)}`).join(" | ")}</p></article>`).join("") : "<p class=\"screen-empty\">Nenhum pedido.</p>";
+  const orders = getOrders();
+  return rows.length ? rows.map(order => `<article class="screen-card ${order.status === "pronto" ? "ready" : ""}"><span class="screen-order-code">${orderQueueLabel(order, orders)} | ordem de chegada</span><strong>${escapeHtml(order.customer)}</strong><span>${escapeHtml(FULFILLMENT[order.fulfillment] || order.fulfillment)}</span><p>${order.items.map(item => `${item.qty}x ${escapeHtml(item.name)}`).join(" | ")}</p></article>`).join("") : "<p class=\"screen-empty\">Nenhum pedido.</p>";
 }
 
 initMenu();
