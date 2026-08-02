@@ -942,7 +942,7 @@ function renderScreen() {
 }
 function screenCards(rows) {
   const orders = getOrders();
-  return rows.length ? rows.map(order => `<article class="screen-card ${order.status === "pronto" ? "ready" : ""}"><span class="screen-order-code">${orderQueueLabel(order, orders)} | ordem de chegada</span><strong>${escapeHtml(order.customer)}</strong><span>${escapeHtml(FULFILLMENT[order.fulfillment] || order.fulfillment)}</span><p>${order.items.map(item => `${item.qty}x ${escapeHtml(item.name)}`).join(" | ")}</p></article>`).join("") : "<p class=\"screen-empty\">Nenhum pedido.</p>";
+  return rows.length ? rows.map(order => `<article class="screen-card ${order.status === "pronto" ? "ready" : ""}"><span class="screen-order-code">${orderQueueLabel(order, orders)}</span><strong>${escapeHtml(order.customer)}</strong><span>${escapeHtml(FULFILLMENT[order.fulfillment] || order.fulfillment)}</span><p>${order.items.map(item => `${item.qty}x ${escapeHtml(item.name)}`).join(" | ")}</p></article>`).join("") : "<p class=\"screen-empty\">Nenhum pedido.</p>";
 }
 
 initMenu();
