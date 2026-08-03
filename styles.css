@@ -496,3 +496,235 @@ input, select, textarea { border-radius: 14px; background: #1e1913; }
   }
 }
 
+/* Closer extracted prototype mapping */
+body[data-page="menu"] {
+  background:
+    radial-gradient(circle at 50% -10%, rgba(201,116,67,.14), transparent 32%),
+    #100e0c;
+}
+body[data-page="menu"] .topbar,
+body[data-page="menu"] .hero,
+body[data-page="menu"] .shop-layout,
+body[data-page="menu"] .nexo-footer {
+  max-width: 430px;
+  margin-left: auto;
+  margin-right: auto;
+}
+body[data-page="menu"] .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 18;
+  padding: 16px 20px 8px;
+  background: #151210;
+  border-bottom: 0;
+}
+body[data-page="menu"] .topbar .brand img {
+  width: 42px;
+  height: 42px;
+}
+body[data-page="menu"] .top-actions {
+  gap: 6px;
+}
+body[data-page="menu"] .top-actions a {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: .78rem;
+}
+body[data-page="menu"] .hero {
+  min-height: 180px;
+  margin-top: 10px;
+  padding: 16px;
+  border: 0;
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(19,16,9,0) 20%, rgba(19,16,9,.94) 100%),
+    url("images/loja-baixo-k-hero.png") center/cover;
+}
+body[data-page="menu"] .hero::before,
+body[data-page="menu"] .hero::after,
+body[data-page="menu"] .hero-mark,
+body[data-page="menu"] .venue-card {
+  display: none;
+}
+body[data-page="menu"] .hero-copy {
+  align-self: end;
+  max-width: none;
+  gap: 5px;
+  padding: 0;
+}
+body[data-page="menu"] .hero .live-badge {
+  padding: 5px 12px;
+  color: #e8b184;
+  background: rgba(19,16,9,.75);
+  font-size: .68rem;
+}
+body[data-page="menu"] .hero h1 {
+  font-size: 1.65rem;
+  line-height: 1;
+}
+body[data-page="menu"] .hero h1::after {
+  margin-top: 6px;
+  font-size: .74rem;
+  color: #e8b184;
+}
+body[data-page="menu"] .hero p {
+  font-size: .86rem;
+  color: #cfc4b6;
+}
+body[data-page="menu"] .hero-actions {
+  display: none;
+}
+body[data-page="menu"] .shop-layout {
+  display: block;
+  padding: 14px 20px 90px;
+}
+body[data-page="menu"] .mobile-order-strip,
+body[data-page="menu"] .experience-strip {
+  display: none;
+}
+body[data-page="menu"] .signature-strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  margin-bottom: 14px;
+}
+body[data-page="menu"] .signature-strip article {
+  min-width: 260px;
+  min-height: 150px;
+  scroll-snap-align: start;
+  border-radius: 22px;
+  box-shadow: none;
+}
+body[data-page="menu"] .signature-strip img,
+body[data-page="menu"] .signature-strip .no-photo {
+  min-height: 150px;
+}
+body[data-page="menu"] .signature-strip strong {
+  font-size: 1rem;
+}
+body[data-page="menu"] .signature-strip em {
+  display: none;
+}
+body[data-page="menu"] .menu-shell {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+body[data-page="menu"] .menu-shell .section-head {
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+body[data-page="menu"] .menu-shell .section-head .eyebrow,
+body[data-page="menu"] .menu-shell .section-head p {
+  display: none;
+}
+body[data-page="menu"] .menu-shell .section-head h2 {
+  color: #f3ece3;
+  font-size: 1.2rem;
+}
+body[data-page="menu"] .menu-shell .section-head input {
+  max-width: none;
+  border-radius: 999px;
+  background: #1e1913;
+}
+body[data-page="menu"] .filters {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+body[data-page="menu"] .filter {
+  min-height: 38px;
+  white-space: nowrap;
+  border: 0;
+}
+body[data-page="menu"] .menu-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+body[data-page="menu"] .product {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  min-height: 104px;
+  border: 0;
+  border-radius: 20px;
+  background: #1e1913;
+}
+body[data-page="menu"] .product img,
+body[data-page="menu"] .product .no-photo {
+  min-height: 104px;
+  height: 100%;
+  border-radius: 15px;
+}
+body[data-page="menu"] .product .badge {
+  display: none;
+}
+body[data-page="menu"] .product-body {
+  padding: 10px 11px;
+  gap: 4px;
+}
+body[data-page="menu"] .product strong {
+  color: #f3ece3;
+  font-size: .94rem;
+}
+body[data-page="menu"] .product p {
+  font-size: .78rem;
+  -webkit-line-clamp: 2;
+}
+body[data-page="menu"] .stock-chip {
+  display: none;
+}
+body[data-page="menu"] .product .price-row span {
+  color: #d99a68;
+  font-size: .95rem;
+}
+body[data-page="menu"] .product .primary {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 0;
+}
+body[data-page="menu"] .product .primary::before {
+  content: "+";
+  font-size: 1rem;
+  font-weight: 900;
+}
+body[data-page="menu"] .cart {
+  left: max(0px, calc(50% - 215px));
+  right: auto;
+  width: min(430px, 100vw);
+  border-radius: 26px 26px 0 0;
+}
+body[data-page="menu"].cart-open .shop-layout {
+  padding-right: 20px;
+}
+body[data-page="menu"] .mobile-cart {
+  max-width: 390px;
+  min-height: 54px;
+  bottom: 16px;
+}
+
+@media (min-width: 901px) {
+  body[data-page="menu"] .topbar,
+  body[data-page="menu"] .hero,
+  body[data-page="menu"] .shop-layout,
+  body[data-page="menu"] .nexo-footer {
+    box-shadow: 0 22px 70px rgba(0,0,0,.32);
+  }
+  body[data-page="menu"] .topbar {
+    border-radius: 26px 26px 0 0;
+    margin-top: 24px;
+  }
+  body[data-page="menu"] .nexo-footer {
+    border-radius: 0 0 26px 26px;
+    background: #151210;
+  }
+}
+
