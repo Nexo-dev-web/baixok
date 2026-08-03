@@ -1,4 +1,4 @@
-const CACHE_NAME = "baixo-k-v20";
+const CACHE_NAME = "baixo-k-v21";
 const ASSETS = [
   "./",
   "./index.html",
