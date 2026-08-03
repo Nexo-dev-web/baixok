@@ -808,6 +808,7 @@ function exportDashboardExcel() {
 
 function buildReceipt(order, type) {
   const kitchen = type === "kitchen";
+  const code = order.id === "teste" ? "TESTE" : orderQueueLabel(order);
   const items = order.items.map(item => `
     <div class="item">
       <div><strong>${escapeHtml(item.qty)}x ${escapeHtml(item.name)}</strong>${item.note ? `<small>${escapeHtml(item.note)}</small>` : ""}</div>
@@ -817,25 +818,26 @@ function buildReceipt(order, type) {
   return `<!doctype html>
   <html><head><meta charset="utf-8"><title>Baixo K</title>
   <style>
-    @page { size: 80mm auto; margin: 2mm; }
+    @page { size: 80mm auto; margin: 0; }
     * { box-sizing: border-box; }
-    body { width: 76mm; margin: 0; color: #000; background: #fff; font-family: Arial, sans-serif; font-size: ${kitchen ? "18px" : "13px"}; font-weight: 500; }
+    body { width: 68mm; max-width: 68mm; margin: 0 auto; padding: 2mm 0; color: #000; background: #fff; font-family: Arial, sans-serif; font-size: ${kitchen ? "16px" : "12px"}; font-weight: 500; overflow-wrap: anywhere; }
     h1,h2,p { margin: 0; }
-    .brand { text-align: center; padding-bottom: 6px; border-bottom: 2px solid #000; }
-    .brand h1 { font-size: ${kitchen ? "28px" : "20px"}; letter-spacing: 0; }
-    .brand p { margin-top: 2px; font-size: 11px; }
-    .ticket-type { margin: 7px 0; padding: 6px 4px; border: 2px solid #000; text-align: center; font-size: ${kitchen ? "26px" : "16px"}; font-weight: 900; }
-    .pickup { margin: 7px 0; padding: 7px 4px; color: #fff; background: #000; text-align: center; font-size: ${kitchen ? "28px" : "24px"}; font-weight: 900; }
-    .meta, .totals, .obs { padding: 7px 0; border-top: 1px dashed #000; }
-    .meta p, .line { display: flex; justify-content: space-between; gap: 7px; padding: 2px 0; }
-    .meta strong { text-align: right; }
-    .big-code { display: block; text-align: center; font-size: ${kitchen ? "34px" : "24px"}; font-weight: 900; }
-    .customer { margin: 7px 0; padding: 7px 4px; border: 2px solid #000; text-align: center; font-size: ${kitchen ? "24px" : "16px"}; font-weight: 900; }
-    .item { display: grid; grid-template-columns: minmax(0,1fr) ${kitchen ? "0" : "62px"}; gap: 6px; padding: ${kitchen ? "10px 0" : "5px 0"}; border-top: 1px solid #000; }
-    .item strong { display: block; font-size: ${kitchen ? "23px" : "14px"}; line-height: 1.18; }
-    .item small { display: block; margin-top: 3px; font-size: 14px; font-weight: 800; }
-    .item span { text-align: right; font-weight: 800; }
-    .obs { border: 2px solid #000; margin-top: 8px; padding: 7px; }
+    .brand { text-align: center; padding-bottom: 4px; border-bottom: 1px solid #000; }
+    .brand h1 { font-size: ${kitchen ? "22px" : "18px"}; letter-spacing: 0; }
+    .brand p { margin-top: 1px; font-size: 9px; }
+    .ticket-type { margin: 5px 0; padding: 4px 3px; border: 1px solid #000; text-align: center; font-size: ${kitchen ? "21px" : "15px"}; font-weight: 900; }
+    .pickup { margin: 5px 0; padding: 5px 3px; color: #fff; background: #000; text-align: center; font-size: ${kitchen ? "22px" : "18px"}; font-weight: 900; }
+    .meta, .totals, .obs { padding: 5px 0; border-top: 1px dashed #000; }
+    .meta p { display: grid; grid-template-columns: 20mm minmax(0, 1fr); gap: 3mm; padding: 2px 0; align-items: start; }
+    .line { display: grid; grid-template-columns: minmax(0,1fr) 20mm; gap: 3mm; padding: 2px 0; }
+    .meta strong { text-align: right; overflow-wrap: anywhere; word-break: break-word; }
+    .big-code { display: block; text-align: center; font-size: ${kitchen ? "28px" : "22px"}; font-weight: 900; }
+    .customer { margin: 5px 0; padding: 5px 3px; border: 1px solid #000; text-align: center; font-size: ${kitchen ? "20px" : "15px"}; font-weight: 900; overflow-wrap: anywhere; }
+    .item { display: grid; grid-template-columns: ${kitchen ? "1fr" : "minmax(0,1fr) 18mm"}; gap: 3mm; padding: ${kitchen ? "8px 0" : "4px 0"}; border-top: 1px solid #000; }
+    .item strong { display: block; font-size: ${kitchen ? "19px" : "13px"}; line-height: 1.16; overflow-wrap: anywhere; }
+    .item small { display: block; margin-top: 3px; font-size: 12px; font-weight: 800; }
+    .item span { ${kitchen ? "display: none;" : ""} text-align: right; font-weight: 800; }
+    .obs { border: 1px solid #000; margin-top: 6px; padding: 5px; }
     .obs strong { display: block; margin-bottom: 4px; font-size: ${kitchen ? "20px" : "13px"}; }
     .obs p { font-size: ${kitchen ? "19px" : "13px"}; font-weight: 900; }
     strong, p, div { overflow-wrap: anywhere; }
@@ -844,7 +846,7 @@ function buildReceipt(order, type) {
   <body>
     <section class="brand"><h1>BAIXO K</h1><p>PIZZA | BURGUES | MASSAS | DRINKS</p></section>
     <div class="ticket-type">${kitchen ? "COZINHA" : "BALCAO"}</div>
-    <strong class="big-code">#${String(order.id).slice(-5)}</strong>
+    <strong class="big-code">${escapeHtml(code)}</strong>
     ${order.fulfillment === "retirada" ? `<div class="pickup">RETIRADA</div>` : ""}
     <div class="customer">${escapeHtml(order.customer || "CLIENTE")}</div>
     <div class="meta">
