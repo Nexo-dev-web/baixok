@@ -39,19 +39,19 @@ const STATUS = {
   cancelado: "Cancelado"
 };
 const DEFAULT_PRODUCTS = [
-  { id: "pizza-calabresa", name: "Pizza Calabresa", category: "pizzas", price: 39.9, stock: 18, minStock: 4, active: true, image: CATEGORY_IMAGES.pizzas, badge: "Pizza", description: "Mussarela, calabresa, cebola e oregano." },
-  { id: "pizza-frango", name: "Pizza Frango Catupiry", category: "pizzas", price: 44.9, stock: 14, minStock: 4, active: true, image: CATEGORY_IMAGES.pizzas, badge: "Pizza", description: "Frango temperado, catupiry e mussarela." },
-  { id: "pizza-baixo-k", name: "Pizza Baixo K", category: "pizzas", price: 49.9, stock: 10, minStock: 3, active: true, image: CATEGORY_IMAGES.pizzas, badge: "Mais pedida", description: "Massa da casa, mix de queijos, bacon e finalizacao especial." },
-  { id: "burguer-classico", name: "Burguer Classico", category: "burgues", price: 22.9, stock: 30, minStock: 6, active: true, image: CATEGORY_IMAGES.burgues, badge: "Burguer", description: "Pao brioche, carne, queijo, salada e molho da casa." },
-  { id: "burguer-bacon", name: "Burguer Bacon", category: "burgues", price: 27.9, stock: 24, minStock: 6, active: true, image: CATEGORY_IMAGES.burgues, badge: "Bacon", description: "Carne, cheddar, bacon crocante e cebola caramelizada." },
-  { id: "burguer-duplo", name: "Burguer Duplo K", category: "burgues", price: 34.9, stock: 16, minStock: 4, active: true, image: CATEGORY_IMAGES.burgues, badge: "Duplo", description: "Duas carnes, queijo duplo, bacon e molho especial." },
-  { id: "massa-bolonhesa", name: "Massa Bolonhesa", category: "massas", price: 31.9, stock: 12, minStock: 3, active: true, image: CATEGORY_IMAGES.massas, badge: "Massa", description: "Massa ao molho bolonhesa com parmesao." },
-  { id: "massa-alfredo", name: "Massa Alfredo", category: "massas", price: 33.9, stock: 12, minStock: 3, active: true, image: CATEGORY_IMAGES.massas, badge: "Cremosa", description: "Molho branco cremoso, frango e toque de ervas." },
-  { id: "batata-k", name: "Batata Baixo K", category: "porcoes", price: 24.9, stock: 20, minStock: 5, active: true, image: CATEGORY_IMAGES.burgues, badge: "Porcao", description: "Batata frita com cheddar, bacon e molho da casa." },
-  { id: "refri-lata", name: "Refrigerante Lata", category: "drinks", price: 7.9, stock: 48, minStock: 12, active: true, image: CATEGORY_IMAGES.drinks, badge: "Gelado", description: "Lata 350ml gelada." },
-  { id: "refri-2l", name: "Refrigerante 2L", category: "drinks", price: 14.9, stock: 18, minStock: 6, active: true, image: CATEGORY_IMAGES.drinks, badge: "2 litros", description: "Garrafa 2L gelada." },
-  { id: "drink-limao", name: "Drink Limao", category: "drinks", price: 16.9, stock: 22, minStock: 5, active: true, image: CATEGORY_IMAGES.drinks, badge: "Drink", description: "Drink refrescante de limao para acompanhar o pedido." },
-  { id: "drink-maracuja", name: "Drink Maracuja", category: "drinks", price: 18.9, stock: 18, minStock: 5, active: true, image: CATEGORY_IMAGES.drinks, badge: "Assinatura", description: "Maracuja, gelo e finalizacao da casa." }
+  { id: "pizza-calabresa", name: "Pizza Calabresa", category: "pizzas", price: 39.9, stock: 18, minStock: 4, active: true, image: "", badge: "Pizza", description: "Mussarela, calabresa, cebola e oregano." },
+  { id: "pizza-frango", name: "Pizza Frango Catupiry", category: "pizzas", price: 44.9, stock: 14, minStock: 4, active: true, image: "", badge: "Pizza", description: "Frango temperado, catupiry e mussarela." },
+  { id: "pizza-baixo-k", name: "Pizza Baixo K", category: "pizzas", price: 49.9, stock: 10, minStock: 3, active: true, image: "", badge: "Mais pedida", description: "Massa da casa, mix de queijos, bacon e finalizacao especial." },
+  { id: "burguer-classico", name: "Burguer Classico", category: "burgues", price: 22.9, stock: 30, minStock: 6, active: true, image: "", badge: "Burguer", description: "Pao brioche, carne, queijo, salada e molho da casa." },
+  { id: "burguer-bacon", name: "Burguer Bacon", category: "burgues", price: 27.9, stock: 24, minStock: 6, active: true, image: "", badge: "Bacon", description: "Carne, cheddar, bacon crocante e cebola caramelizada." },
+  { id: "burguer-duplo", name: "Burguer Duplo K", category: "burgues", price: 34.9, stock: 16, minStock: 4, active: true, image: "", badge: "Duplo", description: "Duas carnes, queijo duplo, bacon e molho especial." },
+  { id: "massa-bolonhesa", name: "Massa Bolonhesa", category: "massas", price: 31.9, stock: 12, minStock: 3, active: true, image: "", badge: "Massa", description: "Massa ao molho bolonhesa com parmesao." },
+  { id: "massa-alfredo", name: "Massa Alfredo", category: "massas", price: 33.9, stock: 12, minStock: 3, active: true, image: "", badge: "Cremosa", description: "Molho branco cremoso, frango e toque de ervas." },
+  { id: "batata-k", name: "Batata Baixo K", category: "porcoes", price: 24.9, stock: 20, minStock: 5, active: true, image: "", badge: "Porcao", description: "Batata frita com cheddar, bacon e molho da casa." },
+  { id: "refri-lata", name: "Refrigerante Lata", category: "drinks", price: 7.9, stock: 48, minStock: 12, active: true, image: "", badge: "Gelado", description: "Lata 350ml gelada." },
+  { id: "refri-2l", name: "Refrigerante 2L", category: "drinks", price: 14.9, stock: 18, minStock: 6, active: true, image: "", badge: "2 litros", description: "Garrafa 2L gelada." },
+  { id: "drink-limao", name: "Drink Limao", category: "drinks", price: 16.9, stock: 22, minStock: 5, active: true, image: "", badge: "Drink", description: "Drink refrescante de limao para acompanhar o pedido." },
+  { id: "drink-maracuja", name: "Drink Maracuja", category: "drinks", price: 18.9, stock: 18, minStock: 5, active: true, image: "", badge: "Assinatura", description: "Maracuja, gelo e finalizacao da casa." }
 ];
 
 let currentCategory = "todos";
@@ -101,7 +101,8 @@ function orderQueueLabel(order, orders = getOrders()) {
   return `Pedido ${orderQueueNumber(order, orders)}`;
 }
 const productImage = product => {
-  if (!product?.image || product.image === "images/baixok-logo-simples.jpg") return "";
+  const placeholderImages = new Set(["images/baixok-logo-simples.jpg", ...Object.values(CATEGORY_IMAGES)]);
+  if (!product?.image || placeholderImages.has(product.image)) return "";
   return product.image;
 };
 const productImageMarkup = (product, alt = "") => {
