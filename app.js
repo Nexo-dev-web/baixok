@@ -275,7 +275,7 @@ function addToCart(id) {
   const nextQty = (existing?.qty || 0) + 1;
   if (nextQty > Number(product.stock || 0)) return toast("Quantidade maior que o estoque.");
   if (existing) existing.qty = nextQty;
-  else rows.push({ id: product.id, name: product.name, price: Number(product.price), qty: 1 });
+  else rows.push({ id: product.id, name: product.name, price: Number(product.price), qty: 1, image: productImage(product) });
   saveCart(rows);
   renderCart();
   openCart();
@@ -305,15 +305,19 @@ function renderCart() {
   const target = document.getElementById("cart-items");
   if (!target) return;
   const rows = cart();
+  const products = getProducts();
   target.innerHTML = rows.length ? rows.map(item => `
     <div class="cart-row">
-      <div class="price-row">
-        <strong>${escapeHtml(item.qty)}x ${escapeHtml(item.name)}</strong>
-        <span>R$ ${money(item.price * item.qty)}</span>
-      </div>
-      <div class="qty-actions">
-        <button onclick="changeQty('${item.id}', -1)">-</button>
-        <button onclick="changeQty('${item.id}', 1)">+</button>
+      <div class="cart-thumb">${productImageMarkup({ name: item.name, image: item.image || productImage(products.find(product => product.id === item.id)) }, item.name)}</div>
+      <div class="cart-row-body">
+        <div class="price-row">
+          <strong>${escapeHtml(item.qty)}x ${escapeHtml(item.name)}</strong>
+          <span>R$ ${money(item.price * item.qty)}</span>
+        </div>
+        <div class="qty-actions">
+          <button onclick="changeQty('${item.id}', -1)">-</button>
+          <button onclick="changeQty('${item.id}', 1)">+</button>
+        </div>
       </div>
     </div>
   `).join("") : "<p>Nenhum item no pedido.</p>";
