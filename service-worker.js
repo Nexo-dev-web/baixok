@@ -1,4 +1,4 @@
-const CACHE_NAME = "baixo-k-v21";
+const CACHE_NAME = "baixo-k-v22";
 const ASSETS = [
   "./",
   "./index.html",
@@ -27,13 +27,20 @@ self.addEventListener("activate", event => {
   self.clients.claim();
 });
 
+// Rede primeiro: a loja sempre recebe a versao publicada mais recente.
+// O cache fica como reserva para quando a conexao cair, mantendo o app offline.
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
+  if (new URL(event.request.url).origin !== self.location.origin) return;
+  // cache: "no-store" pula o cache HTTP do navegador, que pode segurar
+  // um CSS/JS antigo por conta propria e mascarar uma publicacao nova
   event.respondWith(
-    caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
-      const copy = response.clone();
-      caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
-      return response;
-    }).catch(() => caches.match("./index.html")))
+    fetch(event.request, { cache: "no-store" })
+      .then(response => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(event.request).then(cached => cached || caches.match("./index.html")))
   );
 });
