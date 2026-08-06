@@ -199,6 +199,70 @@ O navegador do cliente e tratado como nao confiavel.
 - **Link do painel exposto ao cliente da mesa.** Em modo mesa a topbar normal continuava
   visivel, com o link "▦ Painel". A barra da mesa passou a substitui-la.
 
+### 3.8 Auditoria: o que estava quebrado
+
+Revisao linha a linha do sistema inteiro. Cada item abaixo foi reproduzido antes de
+ser corrigido, e verificado depois.
+
+#### Falhas de seguranca
+
+| O que | Como era explorado | Gravidade |
+|---|---|---|
+| **Senha do balcao na web** | `GET /data/senha.txt` devolvia `200 OK` com a senha em texto puro | Critica |
+| **Banco de clientes na web** | `GET /data/baixo-k.json` devolvia nome, telefone e endereco de todos os pedidos | Critica |
+| **Senha do painel contornavel** | `/Admin.html`, `//admin.html` e `/%61dmin.html` serviam o painel sem sessao: o Set comparava o texto cru da URL, e o Windows abre o arquivo com qualquer caixa | Critica |
+| **Codigo-fonte na web** | `/server.js` e `/package.json` eram servidos | Media |
+| **Forca bruta na senha** | 6 digitos, sem limite de tentativas: 900 mil combinacoes varridas em horas | Alta |
+| **Sessao sem prazo** | `Max-Age` do cookie so vale no navegador; quem rouba o cookie ignora. No servidor a sessao nunca expirava | Alta |
+| **Saida da pasta do site** | `file.startsWith(ROOT)` sem separador: uma pasta vizinha `Baixo Cais Antigo` passava no teste | Media |
+| **Cota da Mapbox aberta** | `/api/entrega/buscar` sem limite virava geocodificador gratuito para qualquer um, gastando as 100 mil buscas do mes da loja | Media |
+| **SSE sem teto** | conexoes ilimitadas em `/api/events` derrubavam o servidor de uma maquina so | Media |
+
+O caminho pedido agora e resolvido **antes** de qualquer decisao: decodifica, normaliza
+`..`, `.` e barras repetidas, confere que nao saiu da pasta, e so entao pergunta se
+aquele arquivo pede senha. Alem disso a pasta `data/`, os dotfiles e tudo que nao tenha
+extensao do proprio site ficam fora por regra, nao por lista de excecoes.
+
+#### Bugs que custavam dinheiro ou dados
+
+- **Estoque nunca reservado.** So baixava quando alguem clicava "entregue" no painel.
+  Ate la a conferencia comparava com um estoque que nao descia: com 18 pizzas
+  cadastradas, 18 clientes pediam 18 cada um e **todos os pedidos eram aceitos**. A casa
+  vendia o que nao tinha e so descobria na hora de montar. Agora baixa no aceite, e
+  recusar devolve.
+- **Apagar o cardapio zerava tudo.** `db()` testava `stored?.products?.length`: cardapio
+  vazio caia no ramo do banco novo e recriava do zero, levando junto pedidos, mesas,
+  promocoes e cupons — com os produtos de exemplo voltando sozinhos.
+- **Apagar o ponto da loja gravava `0, 0`.** `Number(null)` vale 0 e 0 e finito, entao a
+  validacao aceitava. A loja ia parar no golfo da Guine e nenhum endereco do Rio caia
+  em faixa nenhuma.
+- **Faixa de raio removida pelo indice errado.** A tela desenhava ordenado por km e
+  gravava pelo indice da lista crua: baixar o km de uma faixa fazia o "Remover"
+  seguinte apagar outra.
+- **Preco velho no carrinho.** O carrinho guardava o preco do momento da inclusao. Preco
+  alterado ou promocao encerrada enquanto o cliente decidia: a tela mostrava um valor e
+  o servidor cobrava outro, sem explicacao. Agora o carrinho e reconciliado com o
+  cardapio a cada desenho e o cliente e avisado do que mudou.
+- **Mesa aberta nao desbloqueava a tela do cliente.** O caso comum do salao: o cliente
+  le o QR antes de o atendente abrir a mesa. Quando o atendente abria, so o texto da
+  barra mudava — a tela de bloqueio continuava ate ele recarregar, que e exatamente o
+  que a sincronia existe para evitar.
+- **Arquivo com BOM derrubava o banco.** Quem abrisse `baixo-k.json` no Bloco de Notas e
+  salvasse por engano fazia o `JSON.parse` falhar, e o servidor voltava para o backup da
+  vespera sem que ninguem notasse.
+- **Widget de endereco nao limpava.** Depois de enviar um pedido, o widget continuava
+  mostrando o endereco anterior enquanto o campo real ja estava vazio: o proximo envio
+  reclamava de endereco em branco com o endereco na tela.
+
+#### Desempenho
+
+`db()` reparseava o JSON inteiro do `localStorage` a cada chamada, e um desenho de tela
+faz dezenas — `getProducts`, `getOrders`, `getTables`, `getPromos` e `getCoupons` sao
+todos `db()` por dentro, e listas que numeram pedidos chamam `getOrders` **uma vez por
+linha**. Com o movimento de um dia guardado, o painel travava a cada atualizacao de 6
+segundos. Agora o resultado fica em cache, invalidado na escrita e quando outra aba
+grava.
+
 ---
 
 ## 4. Como os dados sao guardados
@@ -265,6 +329,26 @@ de codigo.
   R$ 5,00 para um endereco a 21,5 km — e o pedido com o mesmo endereco foi recusado
   com *"endereco fora da area de entrega (21.5 km da loja)"*. A previa engana a tela,
   nao a cobranca.
+
+### Auditoria (rodada 3.8)
+
+- **22 sondas de seguranca**, todas reproduzidas antes da correcao e refeitas depois:
+  8 arquivos privados, 10 grafias de `/admin.html` e `/telao.html`, 4 tentativas de sair
+  da pasta. Mais forca bruta na senha, escrita sem sessao e o cardapio publico
+  continuando de pe.
+- **Ponto da loja sem Mapbox**: coordenada colada, coordenada invertida corrigida,
+  coordenada fora do Brasil recusada, GPS do aparelho, e faixas criadas e removidas com
+  o token desligado.
+- **Estoque**: 17 → 14 no aceite, pedido de 9999 unidades recusado, recusa devolvendo
+  para 17. Pelo caminho da mesa tambem: 15 → 13.
+- **Mesa ponta a ponta em dois aparelhos isolados**: mesa fechada bloqueia, atendente
+  abre e a tela do cliente **destrava sozinha**, pedido entra na comanda e na fila,
+  balcao ve sem recarregar, conta fechada trava o QR de novo.
+- **BI**: faturamento de R$ 218,50 contando pedido nao entregue, R$ 14,00 identificados
+  como frete, ticket medio de R$ 51,13 sem frete, 2 pedidos em aberto sinalizados,
+  pedido das 23h50 dentro do dia operacional e o de 3 dias atras fora, produto renomeado
+  sem partir o ranking.
+- **Regressao**: 8 abas em 1440px e 390px, sem rolagem lateral, sem erro de console.
 
 ---
 

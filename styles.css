@@ -617,6 +617,24 @@ body.cart-open .mobile-cart { opacity: 0; pointer-events: none; transform: trans
 .sugestao strong { font-size: .85rem; }
 .sugestao span { color: var(--muted); font-size: .76rem; }
 .mapa-loja { width: 100%; aspect-ratio: 640 / 420; object-fit: cover; border-radius: var(--radius-md); border: 1px solid var(--line-soft); background: var(--soft); }
+/* nota de contexto embaixo do numero: sem ela cada metrica e um numero solto */
+.metric-nota { display: block; margin-top: 4px; color: var(--muted); font-size: .72rem; font-style: normal; font-weight: 600; }
+.metric-nota.alerta { color: var(--gold); }
+
+/* — marcar o ponto da loja — */
+.loja-atual { display: grid; gap: 5px; padding: 14px 16px; border-radius: var(--radius-sm); background: var(--soft); border: 1.5px dashed var(--line); }
+.loja-atual.marcada { border-style: solid; border-color: rgba(143,174,109,.4); background: var(--green-panel); }
+.loja-atual strong { font-size: .92rem; }
+.loja-atual span { color: var(--muted); font-size: .8rem; }
+.loja-atual code { color: var(--gold-light); font-family: ui-monospace, Menlo, monospace; font-size: .78rem; font-variant-numeric: tabular-nums; }
+.modo-marcar { display: grid; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.modo-marcar .rotulo { color: var(--muted); font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.modo-marcar .small { font-size: .76rem; line-height: 1.5; }
+.coord-row { display: flex; gap: 8px; }
+.coord-row input { font-variant-numeric: tabular-nums; }
+.coord-row .secondary { flex: none; }
+button[disabled] { opacity: .55; cursor: progress; }
+
 .faixas { display: grid; gap: 8px; }
 .faixa-head, .faixa { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; align-items: center; }
 .faixa-head span { color: var(--muted); font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }

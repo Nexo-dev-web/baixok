@@ -71,7 +71,24 @@ O QR e gerado na aba Mesas, botao **QR** no card. Ele aponta para o endereco pub
 em `MENU_URL` (em `app.js`) - se publicar em outro endereco, ajuste essa constante
 antes de imprimir os codigos.
 
-## Area de entrega (Mapbox)
+## Area de entrega
+
+### Onde fica a loja
+
+Aba **Area de entrega** no painel. Marcar o ponto **nao precisa da Mapbox** — ha tres
+caminhos, e os dois primeiros funcionam sem conta em lugar nenhum:
+
+- **"Estou na loja agora"** — usa o GPS do aparelho. Exige `https` ou `localhost`:
+  rodando na rede interna por `http://192.168.x.x` o navegador recusa sem perguntar.
+- **Colar a coordenada** — no Google Maps, clique com o botao direito no ponto da loja
+  e escolha a primeira opcao do menu; ele copia `-22.8975, -43.1875`. Se as duas vierem
+  trocadas, o sistema percebe e corrige.
+- **Buscar pelo endereco** — so aparece com a Mapbox configurada.
+
+As faixas de raio ficam guardadas com ou sem token, mas **so entram na conta com a
+Mapbox ligada**: transformar o endereco do cliente em coordenada e o que precisa da API.
+
+### Busca de endereco (Mapbox)
 
 Opcional. Sem configurar, a entrega continua funcionando com endereco digitado
 livremente e sem taxa automatica — foi assim que o sistema sempre funcionou.
@@ -129,15 +146,34 @@ A impressao sai pelo dialogo do navegador. Para usar a Elgin i8:
 Impressao silenciosa direta, sem dialogo, precisa de um agente local instalado no
 computador da loja.
 
+## Estoque
+
+O estoque baixa **no aceite do pedido**, nao na entrega. E o que faz o cardapio dizer
+a verdade: reservado o item, ele some da vitrine quando acaba, e o proximo cliente nao
+consegue pedir o que a casa nao tem. Recusar um pedido devolve os itens.
+
 ## O que o servidor nao aceita do cliente
 
 O navegador do cliente e tratado como nao confiavel. Ao receber um pedido, o servidor
 refaz tudo pelo proprio cadastro: preco do produto, preco promocional, desconto de
-cupom e total. Tambem recusa item pausado, quantidade acima do estoque e pedido em
-mesa que nao esteja aberta. O que o cliente manda so diz *o que* foi pedido.
+cupom, taxa de entrega e total. Tambem recusa item pausado, quantidade acima do
+estoque, endereco fora da area e pedido em mesa que nao esteja aberta. O que o cliente
+manda so diz *o que* foi pedido.
 
 A lista de pedidos nunca vai para quem nao tem sessao: ela carrega nome, telefone e
 endereco de todo mundo que pediu no dia.
+
+Nada da pasta `data/` e servido pela web — nem o banco, nem a senha, nem o token. O
+servidor tambem so entrega arquivos com extensao do proprio site, e `server.js`,
+`package.json` e qualquer arquivo comecando com ponto ficam de fora.
+
+A senha aceita 10 tentativas a cada 15 minutos por IP, e a sessao expira em 30 dias no
+servidor — nao so no navegador.
+
+> **Atras de um proxy com TLS, rode com `CONFIAR_PROXY=1`.** Sem isso todo mundo chega
+> com o IP do proxy e um cliente errando a senha trava a loja inteira. Com a variavel
+> ligada o servidor usa o IP real que o proxy anuncia em `X-Forwarded-For`. Nao ligue a
+> variavel sem proxy na frente: quem chama direto escreve o que quiser nesse cabecalho.
 
 ## Limitacoes conhecidas
 

@@ -20,9 +20,37 @@ const DATA_DIR = path.join(ROOT, "data");
 const DATA_FILE = path.join(DATA_DIR, "baixo-k.json");
 const SENHA_FILE = path.join(DATA_DIR, "senha.txt");
 
-/* Paginas do balcao pedem senha; o cardapio do cliente e aberto. */
-const PAGINAS_RESTRITAS = new Set(["/admin.html", "/telao.html"]);
-const sessoes = new Set();
+/* Paginas do balcao pedem senha; o cardapio do cliente e aberto.
+ * Guardadas sem a barra e em minusculas: a comparacao acontece depois de
+ * resolver o caminho, nunca sobre o texto cru da URL. */
+const PAGINAS_RESTRITAS = new Set(["admin.html", "telao.html"]);
+
+const SESSOES_FILE = path.join(DATA_DIR, "sessoes.json");
+const SESSAO_MS = 30 * 24 * 60 * 60 * 1000;
+/* token -> instante em que expira. Antes era um Set sem prazo: um cookie
+ * roubado valia para sempre, porque o Max-Age do cookie so vale no navegador
+ * e quem ataca simplesmente nao o respeita. */
+let sessoes = new Map();
+
+function carregarSessoes() {
+  try {
+    const bruto = JSON.parse(fs.readFileSync(SESSOES_FILE, "utf8"));
+    sessoes = new Map(Object.entries(bruto).filter(([, ate]) => Date.now() < ate));
+  } catch {
+    sessoes = new Map();
+  }
+}
+function gravarSessoes() {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(SESSOES_FILE, JSON.stringify(Object.fromEntries(sessoes)), "utf8");
+  } catch {}
+}
+function limparSessoes() {
+  const antes = sessoes.size;
+  sessoes.forEach((ate, token) => { if (Date.now() > ate) sessoes.delete(token); });
+  if (sessoes.size !== antes) gravarSessoes();
+}
 
 function senhaDaLoja() {
   if (process.env.BAIXOK_SENHA) return process.env.BAIXOK_SENHA;
@@ -38,7 +66,47 @@ function senhaDaLoja() {
 function ehBalcao(req) {
   const cookie = req.headers.cookie || "";
   const achou = cookie.split(";").map(p => p.trim()).find(p => p.startsWith("bk_sessao="));
-  return Boolean(achou && sessoes.has(achou.slice("bk_sessao=".length)));
+  if (!achou) return false;
+  const token = achou.slice("bk_sessao=".length);
+  const ate = sessoes.get(token);
+  if (!ate) return false;
+  if (Date.now() > ate) { sessoes.delete(token); return false; }
+  return true;
+}
+/* Comparacao de senha em tempo constante. Com senha de 6 digitos o ganho e
+ * pequeno, mas custa uma linha e vale quando alguem trocar por uma frase. */
+function senhaConfere(enviada, correta) {
+  const a = Buffer.from(String(enviada));
+  const b = Buffer.from(String(correta));
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+/* — limite de tentativas por IP —
+ * A senha tem 6 digitos: 900 mil combinacoes. Sem limite, um script testa
+ * tudo em algumas horas. Nao substitui um proxy na frente, mas fecha o obvio. */
+const tentativas = new Map();
+/* Atras de um proxy com TLS, todo mundo chega com o IP do proxy: um cliente
+ * errando a senha travaria a loja inteira. Com CONFIAR_PROXY=1 usamos o IP
+ * real que o proxy anuncia. Sem a variavel esse cabecalho e ignorado, porque
+ * quem chama direto pode escrever nele o que quiser e escapar do limite. */
+const CONFIAR_PROXY = process.env.CONFIAR_PROXY === "1";
+function ipDe(req) {
+  if (CONFIAR_PROXY) {
+    const encaminhado = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+    if (encaminhado) return encaminhado;
+  }
+  return String(req.socket.remoteAddress || "desconhecido");
+}
+function excedeu(chave, limite, janelaMs) {
+  const agora = Date.now();
+  const registro = tentativas.get(chave);
+  if (!registro || agora > registro.ate) {
+    tentativas.set(chave, { contagem: 1, ate: agora + janelaMs });
+    return false;
+  }
+  registro.contagem += 1;
+  return registro.contagem > limite;
 }
 
 const MIME = {
@@ -139,15 +207,25 @@ function taxaParaEndereco(endereco, coordenada) {
 }
 let state = { ...EMPTY, rev: 0 };
 let listeners = [];
+const MAX_OUVINTES = 200;
 
 const BACKUP_DIR = path.join(DATA_DIR, "backups");
 const BACKUPS_MANTIDOS = 14;
 
 function lerArquivo(file) {
-  const dados = JSON.parse(fs.readFileSync(file, "utf8"));
+  // remove o BOM: o Bloco de Notas e o PowerShell gravam UTF-8 com marca no
+  // inicio, e JSON.parse recusa. Sem isso, quem abrisse o arquivo para dar uma
+  // olhada e salvasse por engano derrubava o banco para o backup da vespera
+  const texto = fs.readFileSync(file, "utf8").replace(/^﻿/, "");
+  const dados = JSON.parse(texto);
   if (!dados || typeof dados !== "object" || !Array.isArray(dados.products)) {
     throw new Error("formato invalido");
   }
+  // uma colecao corrompida nao pode derrubar o resto: cada uma cai para o vazio
+  ["orders", "tables", "promos", "coupons"].forEach(chave => {
+    if (!Array.isArray(dados[chave])) dados[chave] = [];
+  });
+  if (!dados.delivery || typeof dados.delivery !== "object") dados.delivery = { ...EMPTY.delivery };
   return dados;
 }
 function backupsMaisNovosPrimeiro() {
@@ -220,6 +298,18 @@ function mergeBy(key, current, incoming) {
   return out;
 }
 
+/* Coordenada valida, ou null.
+ * Number(null) e Number("") valem 0, e 0 e um numero finito perfeitamente
+ * valido — entao apagar o ponto da loja gravava lat 0, lng 0, que fica no
+ * golfo da Guine. A partir dali toda distancia dava alguns milhares de km e
+ * nenhum endereco do Rio caia em faixa nenhuma. */
+function coordenada(valor, limite) {
+  if (valor === null || valor === undefined || valor === "") return null;
+  const numero = Number(valor);
+  if (!Number.isFinite(numero) || Math.abs(numero) > limite) return null;
+  return numero;
+}
+
 function applyPatch(patch) {
   if (Array.isArray(patch.orders)) state.orders = mergeBy("id", state.orders, patch.orders);
   if (Array.isArray(patch.products)) state.products = mergeBy("id", state.products, patch.products);
@@ -233,8 +323,8 @@ function applyPatch(patch) {
   if (patch.delivery && typeof patch.delivery === "object") {
     state.delivery = {
       endereco: String(patch.delivery.endereco || "").slice(0, 200),
-      lng: Number.isFinite(Number(patch.delivery.lng)) ? Number(patch.delivery.lng) : null,
-      lat: Number.isFinite(Number(patch.delivery.lat)) ? Number(patch.delivery.lat) : null,
+      lng: coordenada(patch.delivery.lng, 180),
+      lat: coordenada(patch.delivery.lat, 90),
       zones: (Array.isArray(patch.delivery.zones) ? patch.delivery.zones : [])
         .map(z => ({ km: Number(z.km) || 0, fee: Number(z.fee) || 0, min: Number(z.min) || 0 }))
         .filter(z => z.km > 0)
@@ -268,23 +358,57 @@ function readBody(req) {
   });
 }
 
-function serveStatic(req, res, pathname) {
-  const rel = pathname === "/" ? "index.html" : decodeURIComponent(pathname).replace(/^\/+/, "");
-  const file = path.join(ROOT, rel);
-  if (!file.startsWith(ROOT)) {
-    res.writeHead(403).end("acesso negado");
-    return;
+/* Nada aqui sai pela porta. Antes saia: `GET /data/senha.txt` devolvia a senha
+ * do balcao em texto puro, e `/data/baixo-k.json` o cadastro inteiro com nome,
+ * telefone e endereco de todo mundo que ja pediu. */
+const PASTAS_PRIVADAS = new Set(["data", "node_modules", "backups"]);
+const ARQUIVOS_PRIVADOS = new Set(["server.js", "package.json", "package-lock.json"]);
+
+/* Resolve o que foi pedido para um caminho unico dentro da pasta do site, ou
+ * null se escapar. Precisa acontecer ANTES de decidir se a pagina pede senha:
+ * `/Admin.html`, `//admin.html` e `/%61dmin.html` chegam escritos diferente e
+ * abrem o mesmo arquivo. Comparar o texto cru da URL deixava os tres passarem. */
+function resolverCaminho(pathname) {
+  let bruto;
+  try {
+    bruto = decodeURIComponent(pathname);
+  } catch {
+    return null;                                   // %zz invalido
   }
-  fs.readFile(file, (error, buffer) => {
+  if (bruto.includes("\0")) return null;
+  // normalize resolve "..", "." e barras repetidas; a barra invertida vira barra
+  const limpo = path.posix.normalize("/" + bruto.replace(/\\/g, "/")).replace(/^\/+/, "");
+  const relativo = limpo === "" ? "index.html" : limpo;
+  const arquivo = path.join(ROOT, relativo);
+  /* ROOT + separador, e nao so ROOT: sem o separador uma pasta vizinha chamada
+   * "Baixo Cais Antigo" passaria no teste de prefixo de "Baixo Cais". */
+  if (!arquivo.startsWith(ROOT + path.sep)) return null;
+  return { arquivo, relativo: relativo.toLowerCase() };
+}
+function ehPrivado(relativo) {
+  const partes = relativo.split("/");
+  if (partes.some(parte => parte.startsWith("."))) return true;      // .git, .env, .gitignore
+  if (partes.some(parte => PASTAS_PRIVADAS.has(parte))) return true;
+  if (ARQUIVOS_PRIVADOS.has(relativo)) return true;
+  // so serve o que o site precisa: qualquer outra extensao fica de fora
+  return !MIME[path.extname(relativo)];
+}
+
+function serveStatic(res, alvo) {
+  fs.readFile(alvo.arquivo, (error, buffer) => {
     if (error) {
       res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }).end("nao encontrado");
       return;
     }
     res.writeHead(200, {
-      "Content-Type": MIME[path.extname(file).toLowerCase()] || "application/octet-stream",
+      "Content-Type": MIME[path.extname(alvo.relativo)] || "application/octet-stream",
       "Content-Length": buffer.length,
       // sem cache: toda edicao aparece com um F5, e o app pega versao nova na hora
-      "Cache-Control": "no-store, must-revalidate"
+      "Cache-Control": "no-store, must-revalidate",
+      "X-Content-Type-Options": "nosniff",
+      // o painel nunca deve abrir dentro de um iframe de outro site
+      "X-Frame-Options": "SAMEORIGIN",
+      "Referrer-Policy": "same-origin"
     });
     res.end(buffer);
   });
@@ -343,11 +467,22 @@ async function registrarPedido(corpo) {
     entrega = { taxa: calculo.taxa, km: calculo.km, zona: calculo.zona };
   }
 
+  /* Estoque baixa AQUI, no aceite, nao na entrega.
+   * Antes so baixava quando alguem clicava "entregue" no painel. Com 18 pizzas
+   * cadastradas, 18 clientes pediam 18 pizzas cada um e todos os pedidos eram
+   * aceitos: a conferencia comparava com um estoque que nunca descia. A casa
+   * vendia o que nao tinha e so descobria na hora de montar. */
+  conferidos.forEach(item => {
+    const produto = state.products.find(p => p.id === item.id);
+    produto.stock = Math.max(0, Number(produto.stock || 0) - item.qty);
+  });
+
   const novo = {
     id: `ped-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`,
     createdAt: new Date().toISOString(),
     status: "novo",
     printed: false,
+    stockDeducted: true,
     customer: String(pedido.customer || "Cliente").slice(0, 80),
     phone: String(pedido.phone || "").slice(0, 40),
     place: String(pedido.place || "").slice(0, 160),
@@ -383,15 +518,33 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/api/login" && req.method === "POST") {
+    // 10 tentativas a cada 15 minutos por IP: o atendente que erra a senha nao
+    // sente, e a varredura das 900 mil combinacoes deixa de ser viavel
+    if (excedeu(`login:${ipDe(req)}`, 10, 15 * 60 * 1000)) {
+      return sendJson(res, 429, { erro: "Muitas tentativas. Espere 15 minutos." });
+    }
     const corpo = await readBody(req).catch(() => ({}));
-    if (String(corpo.senha || "") !== senhaDaLoja()) {
+    if (!senhaConfere(corpo.senha || "", senhaDaLoja())) {
       return sendJson(res, 401, { erro: "Senha incorreta." });
     }
     const token = crypto.randomBytes(24).toString("hex");
-    sessoes.add(token);
+    sessoes.set(token, Date.now() + SESSAO_MS);
+    gravarSessoes();
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Set-Cookie": `bk_sessao=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`,
+      // Secure so quando ha TLS: em http o navegador descartaria o cookie
+      "Set-Cookie": `bk_sessao=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSAO_MS / 1000}${req.headers["x-forwarded-proto"] === "https" ? "; Secure" : ""}`,
+      "Cache-Control": "no-store"
+    });
+    return res.end(JSON.stringify({ ok: true }));
+  }
+
+  if (pathname === "/api/logout" && req.method === "POST") {
+    const cookie = (req.headers.cookie || "").split(";").map(p => p.trim()).find(p => p.startsWith("bk_sessao="));
+    if (cookie) { sessoes.delete(cookie.slice("bk_sessao=".length)); gravarSessoes(); }
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Set-Cookie": "bk_sessao=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0",
       "Cache-Control": "no-store"
     });
     return res.end(JSON.stringify({ ok: true }));
@@ -405,8 +558,13 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  /* Busca de endereco e mapa passam pelo servidor: o token nunca vai ao navegador. */
+  /* Busca de endereco e mapa passam pelo servidor: o token nunca vai ao navegador.
+   * Com limite por IP - sem ele, o endereco publico do site vira um servico de
+   * geocodificacao de graca e as 100 mil buscas do mes acabam num dia. */
   if (pathname === "/api/entrega/buscar") {
+    if (excedeu(`geo:${ipDe(req)}`, 120, 60 * 60 * 1000)) {
+      return sendJson(res, 429, { erro: "muitas buscas seguidas, tente daqui a pouco" });
+    }
     const q = (url.parse(req.url, true).query.q || "").toString().trim();
     if (q.length < 3) return sendJson(res, 200, { resultados: [] });
     try {
@@ -421,6 +579,9 @@ const server = http.createServer(async (req, res) => {
    * uma coordenada perto da loja, so engana a propria tela - na hora de fechar
    * o pedido o servidor geocodifica o endereco de novo e refaz a conta. */
   if (pathname === "/api/entrega/taxa") {
+    if (excedeu(`taxa:${ipDe(req)}`, 120, 60 * 60 * 1000)) {
+      return sendJson(res, 429, { erro: "muitas consultas seguidas, tente daqui a pouco" });
+    }
     const busca = url.parse(req.url, true).query;
     const q = (busca.q || "").toString().trim();
     const lng = Number(busca.lng);
@@ -479,9 +640,13 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/api/events") {
+    // teto de conexoes: cada aba aberta segura uma, e sem limite uma so
+    // maquina derrubaria o servidor abrindo milhares
+    if (listeners.length >= MAX_OUVINTES) return sendJson(res, 503, { erro: "muitas conexoes abertas" });
     res.writeHead(200, {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-store",
+      "X-Accel-Buffering": "no",
       Connection: "keep-alive"
     });
     res.write(`data: ${state.rev}\n\n`);
@@ -492,12 +657,41 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname.startsWith("/api/")) return sendJson(res, 404, { erro: "rota desconhecida" });
 
-  if (PAGINAS_RESTRITAS.has(pathname) && !balcao) return serveStatic(req, res, "/entrar.html");
-
-  serveStatic(req, res, pathname);
+  /* Daqui para baixo e arquivo. Resolver primeiro, decidir depois: e o que
+   * impede /Admin.html e //admin.html de pularem a senha. */
+  const alvo = resolverCaminho(pathname);
+  if (!alvo || ehPrivado(alvo.relativo)) {
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }).end("nao encontrado");
+    return;
+  }
+  if (PAGINAS_RESTRITAS.has(alvo.relativo) && !balcao) {
+    return serveStatic(res, { arquivo: path.join(ROOT, "entrar.html"), relativo: "entrar.html" });
+  }
+  serveStatic(res, alvo);
 });
 
+/* Um comentario a cada 25s segura o SSE de pe. Sem isso, wifi de loja, NAT e
+ * proxy fecham a conexao por ociosidade e o tablet da cozinha para de receber
+ * pedido sem dar nenhum sinal de que parou. */
+setInterval(() => {
+  listeners = listeners.filter(res => {
+    try { res.write(": ping\n\n"); return true; } catch { return false; }
+  });
+}, 25000).unref();
+setInterval(() => {
+  limparSessoes();
+  const agora = Date.now();
+  tentativas.forEach((registro, chave) => { if (agora > registro.ate) tentativas.delete(chave); });
+}, 60 * 60 * 1000).unref();
+
+// grava o que estiver pendente antes de sair, em vez de perder os ultimos 120ms
+["SIGINT", "SIGTERM"].forEach(sinal => process.on(sinal, () => {
+  try { gravar(); } catch {}
+  process.exit(0);
+}));
+
 load();
+carregarSessoes();
 server.listen(PORT, () => {
   const senha = senhaDaLoja();
   console.log(`Baixo K rodando em http://localhost:${PORT}`);

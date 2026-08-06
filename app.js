@@ -77,24 +77,52 @@ const money = value => Number(value || 0).toLocaleString("pt-BR", { minimumFract
 const uid = prefix => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
 const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", "\"":"&quot;", "'":"&#039;" }[char]));
 const defaultTables = () => Array.from({ length: DEFAULT_TABLE_COUNT }, (unused, index) => ({ n: index + 1, status: "livre", openedAt: null, items: [] }));
+/* Cache do banco local.
+ * Um desenho de tela chama db() dezenas de vezes — getProducts, getOrders,
+ * getTables, getPromos e getCoupons sao todos db() por dentro, e listas que
+ * numeram pedidos chamam getOrders uma vez por linha. Sem cache, cada uma
+ * dessas chamadas reparseava o JSON inteiro do localStorage: com o movimento
+ * de um dia guardado, o painel travava a cada atualizacao de 6 segundos. */
+let dbCache = null;
+const invalidarDb = () => { dbCache = null; };
+
 const db = () => {
-  const stored = JSON.parse(localStorage.getItem(DB_KEY) || "null");
-  if (stored?.products?.length) {
+  if (dbCache) return dbCache;
+  let stored = null;
+  try {
+    stored = JSON.parse(localStorage.getItem(DB_KEY) || "null");
+  } catch {
+    stored = null;                       // localStorage corrompido: recomeca limpo
+  }
+  /* Array.isArray, e nao .length: com `.length` um cardapio vazio caia no ramo
+   * de baixo e recriava o banco do zero. Quem apagasse o ultimo produto no
+   * painel perdia junto pedidos, mesas, promocoes e cupons — e via os produtos
+   * de exemplo voltarem sozinhos. */
+  if (stored && Array.isArray(stored.products)) {
     stored.orders = (stored.orders || []).map(order => order.status === "concluido" ? { ...order, status: "entregue", stockDeducted: true } : order);
     if (!stored.tables?.length) stored.tables = defaultTables();
     if (!Array.isArray(stored.promos)) stored.promos = [];
     if (!Array.isArray(stored.coupons)) stored.coupons = [];
+    dbCache = stored;
     return stored;
   }
   const initial = { products: DEFAULT_PRODUCTS, orders: [], tables: defaultTables(), promos: [], coupons: [], lastHighlightedOrderId: null };
   localStorage.setItem(DB_KEY, JSON.stringify(initial));
+  dbCache = initial;
   return initial;
 };
 const saveDb = data => {
+  dbCache = data;
   localStorage.setItem(DB_KEY, JSON.stringify(data));
   if (sync.on && !sync.applying) syncPush(data);
   window.dispatchEvent(new Event("baixoKDataChanged"));
 };
+/* Outra aba escreveu: o cache desta aba ficou velho. Registrado aqui no topo
+ * de proposito — ouvintes disparam na ordem em que foram registrados, entao
+ * este limpa o cache antes de qualquer redesenho ler dado antigo. */
+window.addEventListener("storage", event => {
+  if (event.key === DB_KEY || event.key === null) invalidarDb();
+});
 
 /* — sincronia entre aparelhos —
  * Com o server.js no ar, o estado passa a morar no servidor e o localStorage
@@ -130,6 +158,7 @@ function applyRemote(remote) {
   SYNC_COLLECTIONS.forEach(key => { local[key] = remote[key] || []; });
   if (remote.delivery) local.delivery = remote.delivery;
   localStorage.setItem(DB_KEY, JSON.stringify(local));
+  dbCache = local;                 // escrevemos direto no localStorage: mantem o cache junto
   sync.rev = remote.rev;
   sync.base = pickCollections(remote);
   sync.applying = false;
@@ -329,7 +358,8 @@ function tableRecord(number) {
 function startTableSession() {
   const number = tableFromUrl();
   if (!number) return;
-  tableSession = { n: number };
+  // bloqueada: null = ainda nao sabemos; a primeira leitura do estado decide
+  tableSession = { n: number, bloqueada: null };
   fulfillmentMode = "mesa";
   document.body.dataset.mode = "mesa";
   const sendButton = document.getElementById("send-order");
@@ -337,7 +367,6 @@ function startTableSession() {
   const nameField = document.getElementById("customer-name");
   if (nameField) nameField.placeholder = "Nome de quem esta pedindo (opcional)";
   refreshTableSession();
-  showTableView(tableRecord(number)?.items?.length ? "comanda" : "inicio");
 }
 function refreshTableSession() {
   if (!tableSession) return;
@@ -354,8 +383,17 @@ function refreshTableSession() {
         ? "A conta desta mesa ja foi fechada no balcao. Para pedir de novo, chame o atendente."
         : "Chame o atendente para abrir a mesa e liberar os pedidos por aqui."
       : "Nao encontramos essa mesa. Confira o QR code ou chame o atendente.";
+    tableSession.bloqueada = true;
     showTableView("blocked");
     return;
+  }
+  /* A mesa acabou de ser aberta e o cliente esta com a tela de bloqueio na mao.
+   * Antes so o texto da barra mudava: a tela continuava travada ate ele
+   * recarregar a pagina — justamente o que a sincronia existe para evitar.
+   * O caso e o comum no salao: o cliente le o QR antes de o atendente abrir. */
+  if (tableSession.bloqueada !== false) {
+    tableSession.bloqueada = false;
+    showTableView(table.items?.length ? "comanda" : "inicio");
   }
   renderTableComanda();
 }
@@ -796,10 +834,45 @@ function renderCouponState() {
       : "O cupom aplicado nao esta mais disponivel.");
   }
 }
+/* O carrinho guarda o preco do instante em que o item entrou. Se o painel
+ * mudar o preco, criar uma promocao ou o estoque cair enquanto o cliente
+ * decide, a tela mostra um valor e o servidor cobra outro — o cliente so
+ * descobre a diferenca depois de enviar. Aqui o carrinho e reconciliado com o
+ * cardapio a cada desenho, e o cliente e avisado do que mudou. */
+function reconciliarCarrinho() {
+  const produtos = getProducts();
+  const promos = getPromos();
+  const atual = [];
+  const avisos = [];
+  let mudou = false;
+  cart().forEach(item => {
+    const produto = produtos.find(row => row.id === item.id);
+    if (!produto || produto.active === false || Number(produto.stock || 0) <= 0) {
+      mudou = true;
+      avisos.push(`${item.name} saiu do cardapio e foi retirado do pedido.`);
+      return;
+    }
+    const preco = effectivePrice(produto, promos);
+    const qty = Math.min(Number(item.qty || 1), Number(produto.stock || 0));
+    if (preco !== Number(item.price)) {
+      mudou = true;
+      avisos.push(`${produto.name} agora custa R$ ${money(preco)}.`);
+    } else if (qty !== Number(item.qty)) {
+      mudou = true;
+      avisos.push(`${produto.name}: restam so ${qty} no estoque.`);
+    }
+    atual.push({ ...item, name: produto.name, price: preco, qty });
+  });
+  if (mudou) {
+    saveCart(atual);
+    if (avisos.length) toast(avisos[0]);
+  }
+  return atual;
+}
 function renderCart() {
   const target = document.getElementById("cart-items");
   if (!target) return;
-  const rows = cart();
+  const rows = reconciliarCarrinho();
   const products = getProducts();
   target.innerHTML = rows.length ? rows.map(item => `
     <div class="cart-row">
@@ -836,9 +909,26 @@ function clearCart() {
   couponFeedback("");
   renderCart();
 }
+/* Move o estoque dos itens de um pedido. sinal -1 reserva no aceite, +1
+ * devolve no cancelamento. Reservar no aceite e o unico jeito de o cardapio
+ * dizer a verdade: se a reserva so acontecesse na entrega, o mesmo item seria
+ * vendido de novo a cada pedido ate alguem clicar "entregue". */
+function moverEstoque(items, sinal) {
+  const porId = new Map();
+  (items || []).forEach(item => porId.set(item.id, (porId.get(item.id) || 0) + Number(item.qty || 1)));
+  return getProducts().map(product => {
+    const qtd = porId.get(product.id);
+    if (!qtd) return product;
+    return { ...product, stock: Math.max(0, Number(product.stock || 0) + sinal * qtd) };
+  });
+}
 function createOrder(order) {
   const data = db();
-  data.orders.unshift({ ...order, id: uid("ped"), createdAt: new Date().toISOString(), status: "novo", printed: false });
+  data.products = moverEstoque(order.items, -1);
+  data.orders.unshift({
+    ...order, id: uid("ped"), createdAt: new Date().toISOString(),
+    status: "novo", printed: false, stockDeducted: true
+  });
   data.lastHighlightedOrderId = data.orders[0].id;
   saveDb(data);
   return data.orders[0];
@@ -907,6 +997,12 @@ async function sendOrder() {
   closeCart();
   ["customer-name", "customer-phone", "customer-place", "order-note"].forEach(id => document.getElementById(id).value = "");
   document.getElementById("payment-method").value = "";
+  /* O widget tem campo proprio: sem limpar, ele continuaria mostrando o
+   * endereco do pedido anterior enquanto o campo real ja estava vazio, e o
+   * proximo envio reclamaria de endereco em branco com o endereco na tela. */
+  geocoderCliente?.clear();
+  cotacaoEntrega = null;
+  document.getElementById("entrega-aviso")?.classList.add("hidden");
   toast(fulfillmentMode === "entrega" ? "Pedido enviado e WhatsApp aberto para entrega." : "Pedido enviado para a cozinha.");
 }
 
@@ -1096,23 +1192,31 @@ function reprintOrder(id) {
   setTimeout(() => printOrder(id, "counter"), 900);
 }
 function cancelOrder(id) {
-  if (!confirm("Recusar este pedido?")) return;
-  saveOrders(getOrders().map(order => order.id === id ? { ...order, status: "cancelado", updatedAt: new Date().toISOString() } : order));
-  toast("Pedido recusado.");
+  const orders = getOrders();
+  const order = orders.find(item => item.id === id);
+  if (!order || order.status === "cancelado") return;
+  if (!confirm("Recusar este pedido? Os itens voltam para o estoque.")) return;
+  const data = db();
+  // o estoque foi reservado quando o pedido entrou: recusar precisa devolver
+  if (order.stockDeducted) data.products = moverEstoque(order.items, +1);
+  data.orders = orders.map(item => item.id === id
+    ? { ...item, status: "cancelado", stockDeducted: false, updatedAt: new Date().toISOString() }
+    : item);
+  saveDb(data);
+  toast(order.stockDeducted ? "Pedido recusado e itens devolvidos ao estoque." : "Pedido recusado.");
 }
 function completeOrder(id) {
   const orders = getOrders();
   const order = orders.find(item => item.id === id);
   if (!order) return;
-  const products = getProducts().map(product => {
-    const sold = order.items.find(item => item.id === product.id);
-    return sold && !order.stockDeducted ? { ...product, stock: Math.max(0, Number(product.stock || 0) - Number(sold.qty || 1)) } : product;
-  });
   const data = db();
-  data.products = products;
-  data.orders = orders.map(item => item.id === id ? { ...item, status: "entregue", stockDeducted: true, completedAt: item.completedAt || new Date().toISOString() } : item);
+  // pedido antigo, de antes da reserva no aceite: baixa agora para nao ficar solto
+  if (!order.stockDeducted) data.products = moverEstoque(order.items, -1);
+  data.orders = orders.map(item => item.id === id
+    ? { ...item, status: "entregue", stockDeducted: true, completedAt: item.completedAt || new Date().toISOString() }
+    : item);
   saveDb(data);
-  toast("Pedido entregue. Venda registrada e estoque baixado.");
+  toast("Pedido entregue. Venda registrada.");
 }
 
 /* — cozinha (KDS) — */
@@ -1642,10 +1746,22 @@ function toggleCoupon(code) {
 }
 
 /* — area de entrega (Mapbox) — */
-const getDelivery = () => db().delivery || { endereco: "", lng: null, lat: null, zones: [] };
+/* Sempre devolve as faixas em ordem crescente de km. A tela desenhava ordenado
+ * mas gravava pelo indice da lista crua: baixar o km de uma faixa fazia o
+ * "Remover" seguinte apagar a faixa errada. Ordenando na leitura, o indice que
+ * a tela ve e o mesmo que o codigo grava. */
+const getDelivery = () => {
+  const bruto = db().delivery || {};
+  return {
+    endereco: bruto.endereco || "",
+    lng: bruto.lng ?? null,
+    lat: bruto.lat ?? null,
+    zones: [...(bruto.zones || [])].sort((a, b) => Number(a.km) - Number(b.km))
+  };
+};
 function saveDelivery(delivery) {
   const data = db();
-  data.delivery = delivery;
+  data.delivery = { ...delivery, zones: [...(delivery.zones || [])].sort((a, b) => Number(a.km) - Number(b.km)) };
   saveDb(data);
 }
 let buscaLojaTimer = null;
@@ -1696,6 +1812,86 @@ function definirLoja(lng, lat, endereco) {
   if (campo) campo.value = "";
   toast("Ponto da loja definido.");
 }
+
+/* — marcar a loja sem depender da Mapbox —
+ * Buscar o endereco do cliente precisa de geocodificacao. Marcar onde a
+ * propria loja fica, nao: o dono ou esta la dentro (e o aparelho sabe a
+ * posicao) ou tem o ponto no Google Maps para colar. Os dois caminhos abaixo
+ * funcionam com zero API, e as faixas de raio passam a valer sem token. */
+function usarMinhaLocalizacao() {
+  const botao = document.getElementById("btn-localizacao");
+  const aviso = document.getElementById("loja-aviso");
+  const dizer = (texto, tipo = "erro") => {
+    if (!aviso) return toast(texto);
+    aviso.className = `entrega-aviso ${tipo}`;
+    aviso.textContent = texto;
+    aviso.classList.remove("hidden");
+  };
+  if (!navigator.geolocation) return dizer("Este navegador nao sabe informar a localizacao.");
+  /* O navegador so entrega a posicao em pagina segura. Rodando na rede da loja
+   * por http://192.168.x.x o Chrome recusa sem nem perguntar - por isso o
+   * caminho da coordenada colada existe. */
+  if (!window.isSecureContext) {
+    return dizer("O navegador so informa a localizacao em https ou localhost. Nesta rede, use a coordenada do Google Maps abaixo.");
+  }
+  if (botao) { botao.disabled = true; botao.textContent = "Localizando..."; }
+  navigator.geolocation.getCurrentPosition(
+    posicao => {
+      const { longitude, latitude, accuracy } = posicao.coords;
+      definirLoja(
+        Number(longitude.toFixed(6)),
+        Number(latitude.toFixed(6)),
+        `Marcado pelo aparelho (precisao de ${Math.round(accuracy)} m)`
+      );
+      dizer(`Ponto marcado com precisao de ${Math.round(accuracy)} m. Confira no mapa antes de criar as faixas.`, "ok");
+    },
+    erro => {
+      if (botao) { botao.disabled = false; botao.textContent = "◎ Estou na loja agora"; }
+      dizer({
+        1: "Voce negou o acesso a localizacao. Libere nas permissoes do navegador ou cole a coordenada abaixo.",
+        2: "O aparelho nao conseguiu se localizar. Tente perto de uma janela ou cole a coordenada abaixo.",
+        3: "A localizacao demorou demais. Tente de novo ou cole a coordenada abaixo."
+      }[erro.code] || "Nao foi possivel obter a localizacao.");
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
+// Brasil inteiro, com folga. Serve para pegar o engano mais comum: lat e lng trocados.
+const BRASIL = { lat: [-34, 6], lng: [-74, -34] };
+const dentroDoBrasil = (lat, lng) =>
+  lat >= BRASIL.lat[0] && lat <= BRASIL.lat[1] && lng >= BRASIL.lng[0] && lng <= BRASIL.lng[1];
+
+function definirLojaPorCoordenada() {
+  const campo = document.getElementById("loja-coords");
+  const aviso = document.getElementById("loja-aviso");
+  const dizer = (texto, tipo = "erro") => {
+    if (!aviso) return toast(texto);
+    aviso.className = `entrega-aviso ${tipo}`;
+    aviso.textContent = texto;
+    aviso.classList.remove("hidden");
+  };
+  // o Google Maps copia "-22.897500, -43.187500"; aceitamos virgula, ponto e virgula ou espaco
+  const numeros = String(campo?.value || "").split(/[,;\s]+/).map(Number).filter(Number.isFinite);
+  if (numeros.length !== 2) {
+    return dizer("Cole as duas coordenadas, no formato -22.8975, -43.1875.");
+  }
+  let [lat, lng] = numeros;
+  if (!dentroDoBrasil(lat, lng) && dentroDoBrasil(lng, lat)) {
+    [lat, lng] = [lng, lat];   // vieram invertidas: o Google copia latitude primeiro
+  }
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return dizer("Essa coordenada nao existe.");
+  if (!dentroDoBrasil(lat, lng)) {
+    return dizer(`Esse ponto cai fora do Brasil (${lat}, ${lng}). Confira antes de salvar.`);
+  }
+  definirLoja(Number(lng.toFixed(6)), Number(lat.toFixed(6)), "Marcado por coordenada");
+  dizer("Ponto da loja salvo. Confira no mapa se caiu no lugar certo.", "ok");
+}
+function limparLoja() {
+  if (!confirm("Apagar o ponto da loja? As faixas de raio param de valer ate voce marcar de novo.")) return;
+  saveDelivery({ ...getDelivery(), lng: null, lat: null, endereco: "" });
+  toast("Ponto da loja apagado.");
+}
 function adicionarFaixa() {
   const zones = getDelivery().zones || [];
   const ultima = zones[zones.length - 1];
@@ -1726,11 +1922,15 @@ async function renderEntrega() {
   assinaturaEntrega = assinatura;
   geocoderLoja = null;
 
-  if (!configurado) {
-    alvo.innerHTML = `
+  const zones = loja.zones;                    // getDelivery ja devolve ordenado por km
+  const marcada = loja.lng != null && loja.lat != null;
+  alvo.innerHTML = `
+    ${configurado ? "" : `
       <div class="setup-card">
-        <h2>Mapbox ainda nao configurado</h2>
-        <p>A area de entrega precisa de um token da Mapbox para transformar endereco em coordenada.</p>
+        <h2>Busca de endereco desligada</h2>
+        <p>Sem token da Mapbox o cliente digita o endereco livremente e <b>a taxa nao e
+           calculada sozinha</b> — as faixas de raio abaixo ficam guardadas, mas nao entram
+           na conta. Marcar o ponto da loja funciona do mesmo jeito.</p>
         <ol>
           <li>Crie a conta em <b>account.mapbox.com</b>.</li>
           <li>Copie o <b>Default public token</b>, o que comeca com <code>pk.</code>.</li>
@@ -1739,40 +1939,70 @@ async function renderEntrega() {
         </ol>
         <p class="faint">Nao coloque restricao por URL nesse token enquanto o servidor tambem o usa:
            chamada de servidor nao manda referer e a Mapbox recusaria.</p>
-        <p class="faint">Enquanto isso, a entrega segue funcionando com endereco digitado livremente, sem taxa automatica.</p>
-      </div>`;
-    return;
-  }
-  const zones = [...(loja.zones || [])].sort((a, b) => a.km - b.km);
-  alvo.innerHTML = `
+      </div>`}
+
     <div class="entrega-grid">
       <section class="panel">
-        <h2>Ponto de partida</h2>
-        <p class="faint">${loja.endereco ? escapeHtml(loja.endereco) : "Nenhum endereco definido ainda."}</p>
-        <div class="geocoder" id="loja-widget"></div>
-        <input id="loja-busca" placeholder="Buscar o endereco da loja..." oninput="buscarLojaNoMapa(this.value)" autocomplete="off">
-        <div class="sugestoes" id="loja-sugestoes"></div>
-        ${loja.lng != null ? `<img class="mapa-loja" src="/api/entrega/mapa?v=${Date.now()}" alt="Mapa da loja">` : ""}
+        <div class="section-head"><h2>Onde fica a loja</h2></div>
+        <div class="loja-atual ${marcada ? "marcada" : ""}">
+          ${marcada
+            ? `<strong>${escapeHtml(loja.endereco || "Ponto marcado")}</strong>
+               <code>${loja.lat}, ${loja.lng}</code>`
+            : `<strong>Nenhum ponto marcado ainda</strong>
+               <span>Sem isso as faixas de raio nao tem de onde medir.</span>`}
+        </div>
+        <p class="entrega-aviso hidden" id="loja-aviso"></p>
+
+        <div class="modo-marcar">
+          <button class="primary wide" id="btn-localizacao" onclick="usarMinhaLocalizacao()">◎ Estou na loja agora</button>
+          <p class="faint small">Usa o GPS deste aparelho. E o jeito mais rapido se voce estiver dentro da loja.
+             Exige https ou localhost — na rede interna por IP o navegador recusa.</p>
+        </div>
+
+        <div class="modo-marcar">
+          <label class="rotulo">Ou cole a coordenada do Google Maps</label>
+          <div class="coord-row">
+            <input id="loja-coords" placeholder="-22.8975, -43.1875" autocomplete="off"
+                   onkeydown="if (event.key === 'Enter') definirLojaPorCoordenada()">
+            <button class="secondary" onclick="definirLojaPorCoordenada()">Marcar</button>
+          </div>
+          <p class="faint small">No Google Maps, clique com o botao direito no ponto da loja e escolha a
+             primeira opcao do menu: ele copia a coordenada pronta.</p>
+        </div>
+
+        ${configurado ? `
+        <div class="modo-marcar">
+          <label class="rotulo">Ou busque pelo endereco</label>
+          <div class="geocoder" id="loja-widget"></div>
+          <input id="loja-busca" placeholder="Buscar o endereco da loja..." oninput="buscarLojaNoMapa(this.value)" autocomplete="off">
+          <div class="sugestoes" id="loja-sugestoes"></div>
+        </div>` : ""}
+
+        ${marcada && configurado ? `<img class="mapa-loja" src="/api/entrega/mapa?v=${Date.now()}" alt="Mapa com o ponto da loja">` : ""}
+        ${marcada ? `<button class="danger small" onclick="limparLoja()">Apagar ponto</button>` : ""}
       </section>
+
       <section class="panel">
         <div class="section-head"><h2>Faixas de raio</h2></div>
-        <p class="faint">A distancia e medida em linha reta a partir da loja. O cliente paga a taxa da primeira faixa que alcanca.</p>
+        <p class="faint">A distancia e medida em linha reta a partir da loja. O cliente paga a taxa da
+           primeira faixa que alcanca, e endereco alem da ultima faixa e recusado.</p>
         <div class="faixas">
           <div class="faixa-head"><span>Ate (km)</span><span>Taxa (R$)</span><span>Pedido min. (R$)</span><span></span></div>
           ${zones.map((zone, i) => `
             <div class="faixa">
-              <input type="number" step="0.5" min="0" value="${zone.km}" onchange="editarFaixa(${i}, 'km', this.value)">
-              <input type="number" step="0.5" min="0" value="${zone.fee}" onchange="editarFaixa(${i}, 'fee', this.value)">
-              <input type="number" step="1" min="0" value="${zone.min}" onchange="editarFaixa(${i}, 'min', this.value)">
+              <input type="number" step="0.5" min="0" value="${zone.km}" onchange="editarFaixa(${i}, 'km', this.value)" aria-label="Distancia maxima da faixa ${i + 1}">
+              <input type="number" step="0.5" min="0" value="${zone.fee}" onchange="editarFaixa(${i}, 'fee', this.value)" aria-label="Taxa da faixa ${i + 1}">
+              <input type="number" step="1" min="0" value="${zone.min}" onchange="editarFaixa(${i}, 'min', this.value)" aria-label="Pedido minimo da faixa ${i + 1}">
               <button class="danger small" onclick="removerFaixa(${i})">Remover</button>
             </div>
           `).join("") || `<p class="faint">Nenhuma faixa criada. Sem faixa, a entrega nao cobra taxa e nao recusa endereco.</p>`}
         </div>
         <button class="secondary" onclick="adicionarFaixa()">+ Adicionar faixa</button>
-        ${loja.lng == null && zones.length ? `<p class="form-error">Defina o ponto da loja para as faixas valerem.</p>` : ""}
+        ${!marcada && zones.length ? `<p class="form-error">Marque o ponto da loja para estas faixas valerem.</p>` : ""}
+        ${marcada && zones.length && !configurado ? `<p class="form-error">Sem token da Mapbox estas faixas ficam guardadas, mas nao sao cobradas.</p>` : ""}
       </section>
     </div>`;
-  montarBuscaLoja();
+  if (configurado) montarBuscaLoja();
 }
 
 /* — estoque — */
@@ -1810,38 +2040,96 @@ function renderChannelFilter() {
   if (!target) return;
   target.innerHTML = `<option value="todos">Canal: todos</option>${Object.entries(CHANNELS).map(([key, label]) => `<option value="${key}">${label}</option>`).join("")}`;
 }
+/* O dia do caixa nao vira a meia-noite. Uma casa que fecha as 2h quer o pedido
+ * das 0h30 somando na noite anterior, e nao abrindo o dia seguinte. O corte
+ * fica as 5h da manha. Antes o filtro "Hoje" eram 24 horas corridas: as 21h
+ * ele misturava o movimento das 21h de ontem em diante, e o numero nunca
+ * batia com o fechamento do caixa. */
+const HORA_VIRADA = 5;
+function inicioDoDiaOperacional(quando = new Date()) {
+  const dia = new Date(quando);
+  if (dia.getHours() < HORA_VIRADA) dia.setDate(dia.getDate() - 1);
+  dia.setHours(HORA_VIRADA, 0, 0, 0);
+  return dia;
+}
+function inicioDoPeriodo() {
+  if (dashPeriod === "tudo") return null;
+  const hoje = inicioDoDiaOperacional();
+  if (dashPeriod === "hoje") return hoje;
+  return new Date(hoje.getTime() - 6 * 86400000);      // 7 dias operacionais, hoje incluso
+}
 function filteredOrders() {
   const status = document.getElementById("filter-status")?.value || "todos";
   const channel = document.getElementById("filter-channel")?.value || "todos";
   const payment = document.getElementById("filter-payment")?.value || "todos";
-  const dayMs = 86400000;
+  const inicio = inicioDoPeriodo();
   return getOrders().filter(order => {
-    const age = Date.now() - new Date(order.createdAt).getTime();
-    const periodOk = dashPeriod === "tudo" || (dashPeriod === "hoje" ? age < dayMs : age < 7 * dayMs);
+    const quando = new Date(order.createdAt).getTime();
+    const periodOk = !inicio || quando >= inicio.getTime();
     const statusOk = status === "todos" || (status === "abertos" ? ["novo", "preparo", "pronto"].includes(order.status) : order.status === status);
     const channelOk = channel === "todos" || order.channel === channel;
     const paymentOk = payment === "todos" || String(order.payment || "").toLowerCase().startsWith(payment.toLowerCase());
     return periodOk && statusOk && channelOk && paymentOk;
   });
 }
+const ABERTOS = ["novo", "preparo", "pronto"];
 function renderDashboard() {
   const metrics = document.getElementById("dashboard-metrics");
   if (!metrics) return;
   const rows = filteredOrders();
-  const delivered = rows.filter(order => order.status === "entregue");
-  const total = delivered.reduce((sum, order) => sum + Number(order.total || 0), 0);
-  const avg = delivered.length ? total / delivered.length : 0;
+  /* Vendido e o que entrou e nao foi recusado. Antes so entrava o que estava
+   * marcado como "entregue": numa noite corrida ninguem clica em nada, e o
+   * dono abria o painel as 23h vendo faturamento zerado com a casa cheia. */
+  const validos = rows.filter(order => order.status !== "cancelado");
+  const cancelados = rows.filter(order => order.status === "cancelado");
+  const abertos = validos.filter(order => ABERTOS.includes(order.status));
+  const bruto = validos.reduce((soma, order) => soma + Number(order.total || 0), 0);
+  // taxa de entrega nao e venda: costuma ir para o entregador e infla o ticket
+  const taxas = validos.reduce((soma, order) => soma + Number(order.deliveryFee || 0), 0);
+  const comida = bruto - taxas;
+  const ticket = validos.length ? comida / validos.length : 0;
+  const taxaCancelamento = rows.length ? (cancelados.length / rows.length) * 100 : 0;
+
   metrics.innerHTML = `
-    <div class="metric"><strong>R$ ${money(total)}</strong><span>Faturamento entregue</span></div>
-    <div class="metric"><strong>${delivered.length}</strong><span>Pedidos entregues</span></div>
-    <div class="metric"><strong>R$ ${money(avg)}</strong><span>Ticket medio</span></div>
-    <div class="metric"><strong>${getProducts().reduce((sum, product) => sum + Number(product.stock || 0), 0)}</strong><span>Itens em estoque</span></div>
+    <div class="metric">
+      <strong>R$ ${money(bruto)}</strong><span>Faturamento do periodo</span>
+      ${taxas ? `<em class="metric-nota">R$ ${money(taxas)} sao taxa de entrega</em>` : ""}
+    </div>
+    <div class="metric">
+      <strong>${validos.length}</strong><span>Pedidos</span>
+      ${abertos.length ? `<em class="metric-nota alerta">${abertos.length} ainda em aberto</em>` : `<em class="metric-nota">nenhum em aberto</em>`}
+    </div>
+    <div class="metric">
+      <strong>R$ ${money(ticket)}</strong><span>Ticket medio</span>
+      <em class="metric-nota">so consumo, sem frete</em>
+    </div>
+    <div class="metric">
+      <strong>${cancelados.length}</strong><span>Recusados</span>
+      <em class="metric-nota ${taxaCancelamento > 10 ? "alerta" : ""}">${taxaCancelamento.toFixed(0)}% do periodo</em>
+    </div>
   `;
-  renderChannelChart(delivered);
-  renderPaymentChart(delivered);
-  renderBestItems(delivered);
+  renderChannelChart(validos);
+  renderPaymentChart(validos);
+  renderHourChart(validos);
+  renderBestItems(validos);
   renderStockAlertChart();
   renderAllOrdersDashboard(rows);
+}
+/* Em que horas a casa enche. E a leitura que vira escala de equipe e hora de
+ * promocao, e era a que faltava: sem ela o painel dizia quanto vendeu, nunca
+ * quando. */
+function renderHourChart(rows) {
+  const target = document.getElementById("hour-chart");
+  if (!target) return;
+  const porHora = new Map();
+  rows.forEach(order => {
+    const hora = new Date(order.createdAt).getHours();
+    porHora.set(hora, (porHora.get(hora) || 0) + Number(order.total || 0));
+  });
+  const entries = [...porHora.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([hora, valor]) => [`${String(hora).padStart(2, "0")}h`, valor]);
+  target.innerHTML = chartRows(entries, valor => `R$ ${money(valor)}`) || `<p class="faint">Sem pedidos no periodo.</p>`;
 }
 function renderChannelChart(rows) {
   const target = document.getElementById("channel-chart");
@@ -1849,30 +2137,42 @@ function renderChannelChart(rows) {
   const grouped = {};
   rows.forEach(order => grouped[order.channel] = (grouped[order.channel] || 0) + Number(order.total || 0));
   const entries = Object.entries(grouped).map(([key, value]) => [CHANNELS[key] || key, value]);
-  target.innerHTML = chartRows(entries, value => `R$ ${money(value)}`) || `<p class="faint">Sem pedidos entregues.</p>`;
+  target.innerHTML = chartRows(entries, value => `R$ ${money(value)}`) || `<p class="faint">Sem pedidos no periodo.</p>`;
 }
 function renderPaymentChart(rows) {
   const target = document.getElementById("payment-chart");
   if (!target) return;
   const grouped = {};
   rows.forEach(order => {
-    const label = String(order.payment || "Outros").split(" ")[0];
+    /* .split(" ")[0] transformava "Pagar no balcao" em "Pagar" e "Conta
+     * fechada" em "Conta". Agora so a primeira palavra das formas conhecidas
+     * e usada; o resto aparece inteiro. */
+    const bruto = String(order.payment || "").trim() || "Nao informado";
+    const conhecida = ["Pix", "Cartao", "Dinheiro", "Online"].find(forma => bruto.toLowerCase().startsWith(forma.toLowerCase()));
+    const label = conhecida || bruto;
     grouped[label] = (grouped[label] || 0) + Number(order.total || 0);
   });
-  target.innerHTML = chartRows(Object.entries(grouped), value => `R$ ${money(value)}`, "sage") || `<p class="faint">Sem pedidos entregues.</p>`;
+  target.innerHTML = chartRows(Object.entries(grouped), value => `R$ ${money(value)}`, "sage") || `<p class="faint">Sem pedidos no periodo.</p>`;
 }
 function renderBestItems(rows) {
   const target = document.getElementById("best-items");
   if (!target) return;
-  const grouped = {};
-  rows.forEach(order => order.items.forEach(item => {
-    if (!grouped[item.name]) grouped[item.name] = { qty: 0, revenue: 0 };
-    grouped[item.name].qty += Number(item.qty || 1);
-    grouped[item.name].revenue += Number(item.price || 0) * Number(item.qty || 1);
+  /* Agrupado por id, e nao pelo nome. Renomear "Pizza Baixo K" para "Pizza da
+   * Casa" partia o historico em dois itens diferentes e sumia com o campeao
+   * de vendas do ranking. O nome mostrado e sempre o atual do cardapio. */
+  const nomeAtual = new Map(getProducts().map(product => [product.id, product.name]));
+  const grouped = new Map();
+  rows.forEach(order => (order.items || []).forEach(item => {
+    const chave = item.id || item.name;
+    const atual = grouped.get(chave) || { qty: 0, revenue: 0, name: item.name };
+    atual.qty += Number(item.qty || 1);
+    atual.revenue += Number(item.price || 0) * Number(item.qty || 1);
+    atual.name = nomeAtual.get(chave) || item.name;
+    grouped.set(chave, atual);
   }));
-  target.innerHTML = Object.entries(grouped).sort((a, b) => b[1].qty - a[1].qty).slice(0, 6)
-    .map(([name, info], index) => `<div class="ranking"><strong>${index + 1}</strong><span>${escapeHtml(name)}</span><em>${info.qty} un. | R$ ${money(info.revenue)}</em></div>`)
-    .join("") || `<p class="faint">Sem pedidos entregues.</p>`;
+  target.innerHTML = [...grouped.values()].sort((a, b) => b.qty - a.qty).slice(0, 6)
+    .map((info, index) => `<div class="ranking"><strong>${index + 1}</strong><span>${escapeHtml(info.name)}</span><em>${info.qty} un. | R$ ${money(info.revenue)}</em></div>`)
+    .join("") || `<p class="faint">Sem pedidos no periodo.</p>`;
 }
 function renderStockAlertChart() {
   const target = document.getElementById("stock-alert-chart");
