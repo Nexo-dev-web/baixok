@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Baixo K - Entrar</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="/images/baixok-logo-v2.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700;800&family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body data-page="entrar">
+  <main class="entrar-page">
+    <form class="entrar-card" id="form-entrar" autocomplete="on">
+      <img src="/images/baixok-logo-v2.png" alt="Baixo K">
+      <div>
+        <h1>Baixo K</h1>
+        <p>Painel da loja. Entre com o seu usuario.</p>
+      </div>
+
+      <label class="campo">
+        Usuario
+        <input id="usuario" name="username" type="text" autocomplete="username" required autofocus
+               placeholder="seu usuario" maxlength="50">
+      </label>
+      <label class="campo">
+        Senha
+        <input id="senha" name="password" type="password" autocomplete="current-password" required
+               placeholder="sua senha" maxlength="200">
+      </label>
+
+      <p class="form-error hidden" id="entrar-erro" role="alert"></p>
+      <button class="primary wide" type="submit" id="botao-entrar">Entrar</button>
+      <a class="secondary wide" href="/index.html">← Ver o cardapio</a>
+    </form>
+  </main>
+
+  <script type="module" src="/src/pages/entrar/index.js"></script>
+</body>
+</html>

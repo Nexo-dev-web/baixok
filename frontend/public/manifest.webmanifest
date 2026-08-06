@@ -1,0 +1,17 @@
+{
+  "name": "Baixo K",
+  "short_name": "Baixo K",
+  "description": "Cardapio digital do Baixo K: pizzas, burgues, massas e drinks.",
+  "start_url": "/index.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#12100e",
+  "theme_color": "#f3c66b",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/images/baixok-logo-v2.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/images/baixok-logo-v2.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/images/baixok-logo-v2.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,11 @@
+/* Estilos da tela de login. */
+@import "./base/tokens.css";
+@import "./base/reset.css";
+@import "./base/motion.css";
+
+@import "./components/buttons.css";
+@import "./components/utilitarios.css";
+@import "./components/formularios.css";
+@import "./components/novos.css";
+
+@import "./pages/entrar.css";

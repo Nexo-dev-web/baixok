@@ -1,0 +1,24 @@
+﻿/* Barra do topo e selos. */
+
+/* â€” topbar (menu + admin top) â€” */
+.topbar {
+  position: sticky; top: 0; z-index: 18; display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; padding: 14px clamp(14px, 4vw, 46px); background: rgba(21,18,16,.92); backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand img { width: 48px; height: 48px; object-fit: cover; border-radius: 50%; border: 1.5px solid rgba(217,154,104,.45); }
+.brand strong { display: block; color: var(--ink); font-family: var(--font-head); font-weight: 800; font-size: 1.05rem; }
+.top-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.top-actions a, .top-actions button { min-height: 38px; padding: 0 14px; font-size: .82rem; }
+
+/* â€” eyebrow / badges â€” */
+.eyebrow, .badge {
+  display: inline-flex; width: max-content; max-width: 100%; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: var(--radius-pill); color: var(--on-accent); background: var(--gold);
+  font-size: .74rem; font-weight: 800; text-transform: uppercase; letter-spacing: .03em;
+}
+.live-badge { color: var(--gold-light); background: rgba(19,16,9,.75); }
+.live-badge::before { content: ""; width: 7px; height: 7px; margin: 0 1px 0 0; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(143,174,109,.2); }
+
+

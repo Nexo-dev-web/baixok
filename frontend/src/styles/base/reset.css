@@ -1,0 +1,31 @@
+﻿/* Reset e base de tipografia. */
+
+/* â€” reset / base â€” */
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; min-height: 100vh; overflow-x: hidden;
+  color: var(--ink); font-family: var(--font-body);
+  background: radial-gradient(circle at 50% -10%, rgba(201,116,67,.14), transparent 32%), var(--bg);
+}
+body[data-page="menu"] .shop-layout, body[data-page="admin"] .admin-app, body[data-page="screen"] .screen-page { animation: pageIn .44s ease both; }
+button, input, select, textarea { font: inherit; }
+button { border: 0; cursor: pointer; background: none; color: inherit; }
+input, select, textarea {
+  width: 100%; min-height: 44px; padding: 10px 14px; border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm); color: var(--ink); background: var(--soft); outline: none;
+}
+input::placeholder, textarea::placeholder { color: var(--faint); }
+input:hover, select:hover, textarea:hover { border-color: rgba(255,255,255,.2); }
+textarea { resize: vertical; }
+h1, h2, p { margin: 0; }
+h1, h2, h3 { font-family: var(--font-head); font-weight: 800; letter-spacing: 0; }
+p, label, .brand span { color: var(--muted); }
+a { color: var(--gold); }
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--copper); outline-offset: 2px; border-radius: 4px; }
+::selection { background: rgba(201,116,67,.35); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--soft); border-radius: 999px; border: 2px solid var(--bg); }
+
+

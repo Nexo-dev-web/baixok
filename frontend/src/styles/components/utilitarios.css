@@ -1,0 +1,10 @@
+﻿/* Classes utilitarias de uso geral. */
+
+.hidden { display: none !important; }
+
+.danger-text { color: var(--danger) !important; }
+.ok-text { color: var(--green) !important; }
+.faint { color: var(--faint); font-size: .84rem; }
+.faint.pad { padding: 20px; }
+.small { font-size: .78rem; }
+

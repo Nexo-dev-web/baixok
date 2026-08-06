@@ -1,0 +1,20 @@
+/* Estilos do cardapio do cliente.
+ *
+ * Uma entrada por pagina. O arquivo unico de 822 linhas era baixado inteiro em
+ * todas as telas: o celular do cliente carregava o CSS do dashboard, do KDS e
+ * da configuracao de entrega para mostrar uma lista de pizzas. */
+@import "./base/tokens.css";
+@import "./base/reset.css";
+@import "./base/motion.css";
+
+@import "./components/buttons.css";
+@import "./components/topbar.css";
+@import "./components/utilitarios.css";
+@import "./components/toast.css";
+@import "./components/endereco.css";
+@import "./components/modais.css";
+@import "./components/novos.css";
+
+@import "./pages/menu.css";
+
+@import "./base/responsivo.css";

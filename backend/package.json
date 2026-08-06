@@ -1,0 +1,24 @@
+{
+  "name": "@baixok/backend",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "comentario": "--disable-warning=ExperimentalWarning silencia o aviso do node:sqlite. A API que usamos (DatabaseSync) e estavel na pratica; o aviso a cada subida so acostuma a equipe a ignorar avisos.",
+  "scripts": {
+    "dev": "node --disable-warning=ExperimentalWarning --watch src/index.js",
+    "start": "node --disable-warning=ExperimentalWarning src/index.js",
+    "migrate": "node --disable-warning=ExperimentalWarning src/db/migrate.js",
+    "seed": "node --disable-warning=ExperimentalWarning src/db/seed.js",
+    "import:legado": "node --disable-warning=ExperimentalWarning src/db/import-legado.js",
+    "test": "node --disable-warning=ExperimentalWarning --test"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.0",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.1.0",
+    "zod": "^4.0.5"
+  }
+}
