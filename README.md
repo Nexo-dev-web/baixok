@@ -71,6 +71,31 @@ O QR e gerado na aba Mesas, botao **QR** no card. Ele aponta para o endereco pub
 em `MENU_URL` (em `app.js`) - se publicar em outro endereco, ajuste essa constante
 antes de imprimir os codigos.
 
+## Area de entrega (Mapbox)
+
+Opcional. Sem configurar, a entrega continua funcionando com endereco digitado
+livremente e sem taxa automatica — foi assim que o sistema sempre funcionou.
+
+1. Crie a conta em `account.mapbox.com` e gere um token.
+2. Guarde em `data/mapbox.txt` ou na variavel `MAPBOX_TOKEN`.
+3. Reinicie o servidor e abra a aba **Area de entrega** no painel.
+4. Busque o endereco da loja e crie as faixas de raio.
+
+O token fica **so no servidor**. A busca de endereco e o mapa passam pelo
+`server.js`, entao ele nunca aparece no navegador do cliente nem no codigo-fonte da
+pagina.
+
+A distancia e medida **em linha reta** a partir da loja, que e o que "raio de entrega"
+significa. O cliente paga a taxa da primeira faixa que alcanca; endereco alem da
+ultima faixa e recusado. Cada faixa tem seu proprio pedido minimo.
+
+Custo: o plano gratuito da Mapbox cobre 100 mil buscas de endereco por mes. Uma casa
+desse porte nao chega perto disso.
+
+**Nao guardamos coordenada de cliente.** O plano gratuito e o de geocodificacao
+temporaria, que proibe armazenamento permanente dos resultados. O sistema calcula a
+taxa na hora e grava so o endereco em texto, a distancia e o valor.
+
 ## Impressora Elgin i8
 
 A impressao sai pelo dialogo do navegador. Para usar a Elgin i8:

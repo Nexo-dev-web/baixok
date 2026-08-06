@@ -170,8 +170,10 @@
       </label>
       <label id="place-label" class="hidden">
         Local de entrega
-        <input id="customer-place" placeholder="Endereco completo">
+        <input id="customer-place" placeholder="Rua e numero" autocomplete="off" oninput="buscarEnderecoCliente(this.value)">
       </label>
+      <div class="sugestoes" id="endereco-sugestoes"></div>
+      <p class="entrega-aviso hidden" id="entrega-aviso"></p>
       <label>
         Pagamento
         <select id="payment-method">
@@ -200,6 +202,10 @@
         <div class="totals-line hidden" id="subtotal-line">
           <span>Subtotal</span>
           <span>R$ <span id="cart-subtotal">0,00</span></span>
+        </div>
+        <div class="totals-line hidden" id="delivery-line">
+          <span>Taxa de entrega</span>
+          <span>R$ <span id="cart-delivery">0,00</span></span>
         </div>
         <div class="totals-line discount hidden" id="discount-line">
           <span>Desconto</span>

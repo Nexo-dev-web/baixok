@@ -3,7 +3,7 @@
 Estado do projeto e registro do que foi construido. Para instrucoes de execucao,
 veja o [README](README.md).
 
-Ultima atualizacao: 05/08/2026.
+Ultima atualizacao: 06/08/2026.
 
 ---
 
@@ -18,7 +18,7 @@ Sao tres telas, um servidor e um arquivo de dados.
 | Arquivo | Papel | Acesso |
 |---|---|---|
 | `index.html` | Cardapio, carrinho e comanda de mesa | Aberto |
-| `admin.html` | Painel da loja, 7 abas | Senha |
+| `admin.html` | Painel da loja, 8 abas | Senha |
 | `telao.html` | Telao de senhas do salao | Senha |
 | `entrar.html` | Tela de senha do balcao | Aberto |
 | `server.js` | Servidor de sincronia e regras de negocio | — |
@@ -50,7 +50,7 @@ implementado sobre a base existente. O design era um prototipo React com dados f
 o que foi portado foi o **layout e as funcionalidades**, mantendo a camada de dados
 real (impressao, exportacao, PWA, telao).
 
-O painel passou de 5 para **7 abas**, com barra lateral fixa a partir de 1100px:
+O painel passou de 5 para **8 abas**, com barra lateral fixa a partir de 1100px:
 
 | Aba | O que faz | Novidade |
 |---|---|---|
@@ -59,6 +59,7 @@ O painel passou de 5 para **7 abas**, com barra lateral fixa a partir de 1100px:
 | Mesas (salao) | Comanda por mesa, QR code, parcial, taxa de servico, fechamento | **Nova** |
 | Produtos | Tabela com miniatura e formulario fixo lateral | Reformulada |
 | Promocoes | Preco promocional, cupons e dicas automaticas | **Nova** |
+| Area de entrega | Ponto da loja e faixas de raio via Mapbox | **Nova** |
 | Estoque | Cards com ajuste −1 / +1 / +6 | Reformulada |
 | Dashboard | Filtros de periodo, status, canal e pagamento; barras; ranking; historico | Reformulada |
 
@@ -121,8 +122,35 @@ Rotas:
 | `/api/order` | POST | Aberto | Pedido do cliente, com todas as regras conferidas |
 | `/api/patch` | POST | **Senha** | Escrita de estado pelo balcao |
 | `/api/events` | GET | Aberto | Fluxo SSE de atualizacao |
+| `/api/entrega/buscar` | GET | Aberto | Busca endereco na Mapbox pelo servidor |
+| `/api/entrega/taxa` | GET | Aberto | Distancia e taxa de um endereco |
+| `/api/entrega/mapa` | GET | Aberto | Imagem do mapa da loja |
 
-### 3.5 Seguranca
+### 3.5 Area de entrega com Mapbox
+
+Ate entao nao havia nada de area de entrega: o cliente digitava o endereco em texto
+livre e quem lia o WhatsApp decidia se valia a pena.
+
+Agora o painel tem a aba **Area de entrega**: marca-se o ponto da loja pela busca de
+endereco e criam-se faixas de raio, cada uma com taxa e pedido minimo. No carrinho, o
+cliente digita o endereco, escolhe entre as sugestoes e ve na hora a distancia, a taxa
+e o total — ou o aviso de que esta fora da area.
+
+Decisoes tomadas:
+
+- **Distancia em linha reta**, que e o que "raio" significa. Nao consome a API de
+  rotas, entao o custo cai para so a geocodificacao.
+- **Token so no servidor.** A busca de endereco e a imagem do mapa passam pelo
+  `server.js`. O token nunca vai para o navegador.
+- **Nenhuma coordenada de cliente e gravada.** O plano gratuito da Mapbox e o de
+  geocodificacao *temporaria*, que proibe armazenamento permanente. Guardamos o
+  endereco em texto, a distancia e o valor — nunca latitude e longitude de quem pediu.
+- **A taxa e recalculada no servidor** no momento do pedido, geocodificando o endereco
+  de novo. Coordenada mandada pelo navegador e ignorada: seria so trocar por uma perto
+  da loja para pagar frete de graca.
+- **Sem token, tudo continua funcionando** como antes: endereco livre, sem taxa.
+
+### 3.6 Seguranca
 
 O navegador do cliente e tratado como nao confiavel.
 
@@ -135,7 +163,7 @@ O navegador do cliente e tratado como nao confiavel.
 - **A lista de pedidos nao vai para quem nao tem sessao** — ela carrega nome, telefone
   e endereco de todo mundo que pediu no dia, e o cardapio e publico.
 
-### 3.6 Correcoes de infraestrutura
+### 3.7 Correcoes de infraestrutura
 
 - **Service worker era cache-first.** Ele respondia do cache antes de tentar a rede, com
   nome de cache fixo — por isso edicoes publicadas nao apareciam. Virou **rede

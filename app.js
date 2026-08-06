@@ -120,12 +120,15 @@ async function initSync() {
   }
 }
 function pickCollections(data) {
-  return SYNC_COLLECTIONS.reduce((patch, key) => ({ ...patch, [key]: data[key] || [] }), {});
+  const patch = SYNC_COLLECTIONS.reduce((acc, key) => ({ ...acc, [key]: data[key] || [] }), {});
+  if (data.delivery) patch.delivery = data.delivery;
+  return patch;
 }
 function applyRemote(remote) {
   sync.applying = true;
   const local = db();
   SYNC_COLLECTIONS.forEach(key => { local[key] = remote[key] || []; });
+  if (remote.delivery) local.delivery = remote.delivery;
   localStorage.setItem(DB_KEY, JSON.stringify(local));
   sync.rev = remote.rev;
   sync.base = pickCollections(remote);
@@ -557,11 +560,69 @@ function changeQty(id, delta) {
   saveCart(rows);
   renderCart();
 }
+/* — endereco e taxa de entrega no carrinho — */
+let cotacaoEntrega = null;
+let buscaEnderecoTimer = null;
+
+function limparCotacao() {
+  cotacaoEntrega = null;
+  const aviso = document.getElementById("entrega-aviso");
+  if (aviso) aviso.classList.add("hidden");
+  renderCart();
+}
+function buscarEnderecoCliente(termo) {
+  clearTimeout(buscaEnderecoTimer);
+  const alvo = document.getElementById("endereco-sugestoes");
+  if (!alvo) return;
+  cotacaoEntrega = null;
+  if (termo.trim().length < 4) {
+    alvo.innerHTML = "";
+    return renderCart();
+  }
+  buscaEnderecoTimer = setTimeout(async () => {
+    try {
+      const { resultados = [] } = await (await fetch(`/api/entrega/buscar?q=${encodeURIComponent(termo)}`)).json();
+      alvo.innerHTML = resultados.map(r => `
+        <button type="button" class="sugestao" onclick="escolherEndereco('${escapeHtml(`${r.nome}, ${r.detalhe}`).replace(/'/g, "&#39;")}')">
+          <strong>${escapeHtml(r.nome)}</strong><span>${escapeHtml(r.detalhe)}</span>
+        </button>
+      `).join("");
+    } catch {
+      alvo.innerHTML = "";
+    }
+  }, 350);
+}
+async function escolherEndereco(endereco) {
+  document.getElementById("customer-place").value = endereco;
+  document.getElementById("endereco-sugestoes").innerHTML = "";
+  const aviso = document.getElementById("entrega-aviso");
+  try {
+    const dados = await (await fetch(`/api/entrega/taxa?q=${encodeURIComponent(endereco)}`)).json();
+    if (!dados.configurado) {
+      cotacaoEntrega = null;
+    } else if (dados.dentro) {
+      cotacaoEntrega = dados;
+      aviso.className = "entrega-aviso ok";
+      aviso.textContent = `Entrega em ${dados.km} km · taxa R$ ${money(dados.taxa)}${dados.minimo ? ` · pedido minimo R$ ${money(dados.minimo)}` : ""}`;
+    } else {
+      cotacaoEntrega = { ...dados, dentro: false };
+      aviso.className = "entrega-aviso erro";
+      aviso.textContent = `Esse endereco esta a ${dados.km} km da loja, fora da area de entrega.`;
+    }
+    aviso.classList.toggle("hidden", !dados.configurado);
+  } catch {
+    cotacaoEntrega = null;
+    aviso.classList.add("hidden");
+  }
+  renderCart();
+}
+const taxaEntrega = () => (fulfillmentMode === "entrega" && cotacaoEntrega?.dentro ? Number(cotacaoEntrega.taxa) : 0);
+
 function cartSubtotal() {
   return cart().reduce((sum, item) => sum + Number(item.price) * Number(item.qty), 0);
 }
 function cartTotal() {
-  return Math.max(0, cartSubtotal() - couponDiscount());
+  return Math.max(0, cartSubtotal() - couponDiscount()) + taxaEntrega();
 }
 
 /* — cupons no carrinho do cliente — */
@@ -657,7 +718,10 @@ function renderCart() {
   const discount = couponDiscount();
   document.getElementById("cart-subtotal").textContent = money(subtotal);
   document.getElementById("cart-discount").textContent = money(discount);
-  document.getElementById("subtotal-line").classList.toggle("hidden", discount === 0);
+  const frete = taxaEntrega();
+  document.getElementById("cart-delivery").textContent = money(frete);
+  document.getElementById("delivery-line").classList.toggle("hidden", frete === 0);
+  document.getElementById("subtotal-line").classList.toggle("hidden", discount === 0 && frete === 0);
   document.getElementById("discount-line").classList.toggle("hidden", discount === 0);
   document.getElementById("cart-total").textContent = money(cartTotal());
   document.getElementById("mobile-total").textContent = money(cartTotal());
@@ -710,6 +774,12 @@ async function sendOrder() {
   const note = document.getElementById("order-note").value.trim();
   const place = fulfillmentMode === "retirada" ? "Retirada" : placeValue;
   if (!customer || !payment || (fulfillmentMode === "entrega" && !placeValue)) return alert(fulfillmentMode === "entrega" ? "Preencha cliente, endereco e pagamento." : "Preencha cliente e pagamento.");
+  if (fulfillmentMode === "entrega" && cotacaoEntrega && !cotacaoEntrega.dentro) {
+    return alert(`Esse endereco esta a ${cotacaoEntrega.km} km da loja, fora da area de entrega.`);
+  }
+  if (fulfillmentMode === "entrega" && cotacaoEntrega?.minimo && cartSubtotal() - couponDiscount() < cotacaoEntrega.minimo) {
+    return alert(`O pedido minimo para entrega nessa faixa e R$ ${money(cotacaoEntrega.minimo)}.`);
+  }
   const coupon = activeCoupon();
   const discount = couponDiscount();
   const draft = {
@@ -757,6 +827,10 @@ const ADMIN_TABS = {
   promos: {
     title: "Promocoes e cupons",
     sub: "Precos promocionais, cupons e dicas geradas pelas vendas."
+  },
+  entrega: {
+    title: "Area de entrega",
+    sub: "Ponto da loja, faixas de raio e taxa cobrada em cada uma."
   },
   estoque: {
     title: "Estoque",
@@ -807,6 +881,7 @@ function renderAdmin() {
   renderProductsAdmin();
   renderPromos();
   renderCoupons();
+  renderEntrega();
   renderStock();
   renderDashboard();
 }
@@ -1461,6 +1536,115 @@ function saveCoupon() {
 }
 function toggleCoupon(code) {
   saveCoupons(getCoupons().map(coupon => coupon.code === code ? { ...coupon, active: !coupon.active } : coupon));
+}
+
+/* — area de entrega (Mapbox) — */
+const getDelivery = () => db().delivery || { endereco: "", lng: null, lat: null, zones: [] };
+function saveDelivery(delivery) {
+  const data = db();
+  data.delivery = delivery;
+  saveDb(data);
+}
+let mapboxPronto = null;
+let buscaLojaTimer = null;
+
+async function mapboxConfigurado() {
+  if (mapboxPronto !== null) return mapboxPronto;
+  try {
+    mapboxPronto = Boolean((await (await fetch("/api/entrega/status")).json()).configurado);
+  } catch {
+    mapboxPronto = false;
+  }
+  return mapboxPronto;
+}
+function buscarLojaNoMapa(termo) {
+  clearTimeout(buscaLojaTimer);
+  const alvo = document.getElementById("loja-sugestoes");
+  if (!alvo) return;
+  if (termo.trim().length < 3) return (alvo.innerHTML = "");
+  buscaLojaTimer = setTimeout(async () => {
+    try {
+      const { resultados = [], erro } = await (await fetch(`/api/entrega/buscar?q=${encodeURIComponent(termo)}`)).json();
+      if (erro) return (alvo.innerHTML = `<p class="form-error">${escapeHtml(erro)}</p>`);
+      alvo.innerHTML = resultados.map(r => `
+        <button type="button" class="sugestao" onclick="definirLoja(${r.lng}, ${r.lat}, '${escapeHtml(`${r.nome} ${r.detalhe}`).replace(/'/g, "&#39;")}')">
+          <strong>${escapeHtml(r.nome)}</strong><span>${escapeHtml(r.detalhe)}</span>
+        </button>
+      `).join("") || `<p class="faint">Nenhum endereco encontrado.</p>`;
+    } catch {
+      alvo.innerHTML = `<p class="form-error">Nao foi possivel buscar agora.</p>`;
+    }
+  }, 350);
+}
+function definirLoja(lng, lat, endereco) {
+  saveDelivery({ ...getDelivery(), lng, lat, endereco });
+  document.getElementById("loja-sugestoes").innerHTML = "";
+  document.getElementById("loja-busca").value = "";
+  toast("Ponto da loja definido.");
+}
+function adicionarFaixa() {
+  const zones = getDelivery().zones || [];
+  const ultima = zones[zones.length - 1];
+  const km = ultima ? Number(ultima.km) + 2 : 2;
+  saveDelivery({ ...getDelivery(), zones: [...zones, { km, fee: 0, min: 0 }] });
+}
+function removerFaixa(indice) {
+  const zones = (getDelivery().zones || []).filter((unused, i) => i !== indice);
+  saveDelivery({ ...getDelivery(), zones });
+}
+function editarFaixa(indice, campo, valor) {
+  const zones = (getDelivery().zones || []).map((zone, i) =>
+    i === indice ? { ...zone, [campo]: Number(String(valor).replace(",", ".")) || 0 } : zone);
+  saveDelivery({ ...getDelivery(), zones });
+}
+async function renderEntrega() {
+  const alvo = document.getElementById("entrega-painel");
+  if (!alvo) return;
+  const configurado = await mapboxConfigurado();
+  if (!configurado) {
+    alvo.innerHTML = `
+      <div class="setup-card">
+        <h2>Mapbox ainda nao configurado</h2>
+        <p>A area de entrega precisa de um token da Mapbox para transformar endereco em coordenada.
+           O token fica no servidor e nunca aparece no navegador.</p>
+        <ol>
+          <li>Crie a conta em <b>account.mapbox.com</b> e gere um token.</li>
+          <li>Guarde em <code>data/mapbox.txt</code> ou na variavel <code>MAPBOX_TOKEN</code>.</li>
+          <li>Reinicie o <code>node server.js</code> e recarregue esta aba.</li>
+        </ol>
+        <p class="faint">Enquanto isso, a entrega segue funcionando com endereco digitado livremente, sem taxa automatica.</p>
+      </div>`;
+    return;
+  }
+  const loja = getDelivery();
+  const zones = [...(loja.zones || [])].sort((a, b) => a.km - b.km);
+  alvo.innerHTML = `
+    <div class="entrega-grid">
+      <section class="panel">
+        <h2>Ponto de partida</h2>
+        <p class="faint">${loja.endereco ? escapeHtml(loja.endereco) : "Nenhum endereco definido ainda."}</p>
+        <input id="loja-busca" placeholder="Buscar o endereco da loja..." oninput="buscarLojaNoMapa(this.value)" autocomplete="off">
+        <div class="sugestoes" id="loja-sugestoes"></div>
+        ${loja.lng != null ? `<img class="mapa-loja" src="/api/entrega/mapa?v=${Date.now()}" alt="Mapa da loja">` : ""}
+      </section>
+      <section class="panel">
+        <div class="section-head"><h2>Faixas de raio</h2></div>
+        <p class="faint">A distancia e medida em linha reta a partir da loja. O cliente paga a taxa da primeira faixa que alcanca.</p>
+        <div class="faixas">
+          <div class="faixa-head"><span>Ate (km)</span><span>Taxa (R$)</span><span>Pedido min. (R$)</span><span></span></div>
+          ${zones.map((zone, i) => `
+            <div class="faixa">
+              <input type="number" step="0.5" min="0" value="${zone.km}" onchange="editarFaixa(${i}, 'km', this.value)">
+              <input type="number" step="0.5" min="0" value="${zone.fee}" onchange="editarFaixa(${i}, 'fee', this.value)">
+              <input type="number" step="1" min="0" value="${zone.min}" onchange="editarFaixa(${i}, 'min', this.value)">
+              <button class="danger small" onclick="removerFaixa(${i})">Remover</button>
+            </div>
+          `).join("") || `<p class="faint">Nenhuma faixa criada. Sem faixa, a entrega nao cobra taxa e nao recusa endereco.</p>`}
+        </div>
+        <button class="secondary" onclick="adicionarFaixa()">+ Adicionar faixa</button>
+        ${loja.lng == null && zones.length ? `<p class="form-error">Defina o ponto da loja para as faixas valerem.</p>` : ""}
+      </section>
+    </div>`;
 }
 
 /* — estoque — */

@@ -602,6 +602,29 @@ body.cart-open .mobile-cart { opacity: 0; pointer-events: none; transform: trans
 .entrar-card p { margin-top: 4px; font-size: .86rem; line-height: 1.45; }
 .entrar-card input { text-align: center; letter-spacing: .12em; }
 
+/* — area de entrega — */
+.entrega-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.entrega-grid .panel { display: grid; gap: 12px; align-content: start; }
+.setup-card { display: grid; gap: 10px; padding: 24px 26px; border-radius: var(--radius-md); background: var(--sidebar); border: 1.5px dashed rgba(217,154,104,.45); }
+.setup-card h2 { font-size: 1.05rem; }
+.setup-card p { line-height: 1.5; font-size: .86rem; }
+.setup-card ol { margin: 0; padding-left: 20px; color: var(--muted-2); font-size: .86rem; line-height: 1.7; }
+.setup-card code { padding: 2px 7px; border-radius: var(--radius-xs); background: var(--soft); color: var(--gold-light); font-family: ui-monospace, Menlo, monospace; font-size: .82em; }
+.sugestoes { display: grid; gap: 5px; }
+.sugestoes:empty { display: none; }
+.sugestao { display: grid; gap: 2px; padding: 9px 13px; border-radius: var(--radius-sm); background: var(--panel); border: 1px solid var(--line-soft); text-align: left; }
+.sugestao:hover { border-color: rgba(217,154,104,.45); background: var(--soft); }
+.sugestao strong { font-size: .85rem; }
+.sugestao span { color: var(--muted); font-size: .76rem; }
+.mapa-loja { width: 100%; height: auto; border-radius: var(--radius-md); border: 1px solid var(--line-soft); }
+.faixas { display: grid; gap: 8px; }
+.faixa-head, .faixa { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; align-items: center; }
+.faixa-head span { color: var(--muted); font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.faixa input { min-height: 38px; font-variant-numeric: tabular-nums; }
+.entrega-aviso { padding: 10px 14px; border-radius: var(--radius-sm); font-size: .82rem; font-weight: 600; line-height: 1.4; }
+.entrega-aviso.ok { background: var(--green-panel); color: var(--green); border: 1.5px solid rgba(143,174,109,.4); }
+.entrega-aviso.erro { background: var(--danger-bg); color: var(--danger); border: 1.5px solid rgba(212,127,110,.45); }
+
 /* — promocoes e cupons no lado do cliente — */
 .product.on-sale .badge { background: var(--green); }
 .product .price-row s { color: var(--faint); font-size: .82em; font-weight: 400; }

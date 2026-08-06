@@ -54,7 +54,80 @@ const MIME = {
   ".ico": "image/x-icon"
 };
 
-const EMPTY = { products: [], orders: [], tables: [], promos: [], coupons: [] };
+const EMPTY = {
+  products: [], orders: [], tables: [], promos: [], coupons: [],
+  // area de entrega: ponto da loja e faixas de raio, em km crescente
+  delivery: { endereco: "", lng: null, lat: null, zones: [] }
+};
+
+const MAPBOX_FILE = path.join(DATA_DIR, "mapbox.txt");
+// permite apontar para outro endereco em teste ou atras de um proxy proprio
+const MAPBOX_API = process.env.MAPBOX_API || "https://api.mapbox.com";
+function tokenMapbox() {
+  if (process.env.MAPBOX_TOKEN) return process.env.MAPBOX_TOKEN.trim();
+  try { return fs.readFileSync(MAPBOX_FILE, "utf8").trim(); } catch { return ""; }
+}
+
+/* Distancia em linha reta, em km. E o que "raio de entrega" quer dizer:
+ * nao mede trajeto, mede afastamento da loja. */
+function distanciaKm(aLng, aLat, bLng, bLat) {
+  const R = 6371;
+  const rad = grau => (grau * Math.PI) / 180;
+  const dLat = rad(bLat - aLat);
+  const dLng = rad(bLng - aLng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function faixaDaDistancia(km, zones) {
+  return [...(zones || [])].sort((a, b) => a.km - b.km).find(zone => km <= Number(zone.km)) || null;
+}
+
+async function geocodificar(texto) {
+  const token = tokenMapbox();
+  if (!token) throw new Error("Mapbox nao configurado no servidor");
+  const loja = state.delivery || {};
+  const params = new URLSearchParams({
+    q: String(texto).slice(0, 256),
+    access_token: token,
+    country: "br",
+    language: "pt",
+    limit: "5",
+    types: "address,street,place,neighborhood"
+  });
+  // proximity puxa os resultados para perto da loja: "Rua Sacadura Cabral" existe em varias cidades
+  if (loja.lng != null && loja.lat != null) params.set("proximity", `${loja.lng},${loja.lat}`);
+
+  const resposta = await fetch(`${MAPBOX_API}/search/geocode/v6/forward?${params}`);
+  if (!resposta.ok) throw new Error(`Mapbox respondeu ${resposta.status}`);
+  const dados = await resposta.json();
+  return (dados.features || []).map(f => ({
+    id: f.properties?.mapbox_id || "",
+    nome: f.properties?.name || "",
+    detalhe: f.properties?.place_formatted || "",
+    lng: f.properties?.coordinates?.longitude,
+    lat: f.properties?.coordinates?.latitude,
+    precisao: f.properties?.coordinates?.accuracy || ""
+  })).filter(r => Number.isFinite(r.lng) && Number.isFinite(r.lat));
+}
+
+/* Taxa calculada aqui, nunca aceita do navegador. */
+function taxaParaEndereco(endereco, coordenada) {
+  const loja = state.delivery || {};
+  if (loja.lng == null || loja.lat == null || !(loja.zones || []).length) {
+    return { configurado: false, taxa: 0, km: null, zona: null };
+  }
+  const km = distanciaKm(loja.lng, loja.lat, coordenada.lng, coordenada.lat);
+  const zona = faixaDaDistancia(km, loja.zones);
+  return {
+    configurado: true,
+    dentro: Boolean(zona),
+    km: Math.round(km * 10) / 10,
+    taxa: zona ? Number(zona.fee) : 0,
+    minimo: zona ? Number(zona.min || 0) : 0,
+    zona: zona ? `ate ${zona.km} km` : null,
+    endereco
+  };
+}
 let state = { ...EMPTY, rev: 0 };
 let listeners = [];
 
@@ -148,6 +221,17 @@ function applyPatch(patch) {
   if (Array.isArray(patch.removeTables)) {
     state.tables = state.tables.filter(table => !patch.removeTables.includes(table.n));
   }
+  if (patch.delivery && typeof patch.delivery === "object") {
+    state.delivery = {
+      endereco: String(patch.delivery.endereco || "").slice(0, 200),
+      lng: Number.isFinite(Number(patch.delivery.lng)) ? Number(patch.delivery.lng) : null,
+      lat: Number.isFinite(Number(patch.delivery.lat)) ? Number(patch.delivery.lat) : null,
+      zones: (Array.isArray(patch.delivery.zones) ? patch.delivery.zones : [])
+        .map(z => ({ km: Number(z.km) || 0, fee: Number(z.fee) || 0, min: Number(z.min) || 0 }))
+        .filter(z => z.km > 0)
+        .sort((a, b) => a.km - b.km)
+    };
+  }
   bump();
 }
 
@@ -205,7 +289,7 @@ function estadoPara(balcao) {
 
 /* Pedido vindo do cliente: o servidor refaz o preco pelo proprio cadastro.
  * O que chega do navegador so diz o que foi pedido, nunca quanto custa. */
-function registrarPedido(corpo) {
+async function registrarPedido(corpo) {
   const pedido = corpo.order || {};
   const itens = Array.isArray(pedido.items) ? pedido.items : [];
   if (!itens.length) throw new Error("pedido sem itens");
@@ -234,6 +318,22 @@ function registrarPedido(corpo) {
     cupom.uses = Number(cupom.uses || 0) + 1;
   }
 
+  /* Entrega: o servidor geocodifica de novo o endereco que veio e refaz a conta.
+   * Coordenada mandada pelo navegador nao entra: seria so trocar por uma perto
+   * da loja para pagar frete de graca. */
+  let entrega = { taxa: 0, km: null, zona: null };
+  const ehEntrega = pedido.fulfillment === "entrega";
+  if (ehEntrega && (state.delivery?.zones || []).length) {
+    const achados = await geocodificar(pedido.place || "");
+    if (!achados.length) throw new Error("nao encontramos esse endereco");
+    const calculo = taxaParaEndereco(pedido.place, achados[0]);
+    if (!calculo.dentro) throw new Error(`endereco fora da area de entrega (${calculo.km} km da loja)`);
+    if (subtotal - desconto < calculo.minimo) {
+      throw new Error(`pedido minimo de R$ ${calculo.minimo.toFixed(2)} para entrega nessa faixa`);
+    }
+    entrega = { taxa: calculo.taxa, km: calculo.km, zona: calculo.zona };
+  }
+
   const novo = {
     id: `ped-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`,
     createdAt: new Date().toISOString(),
@@ -250,7 +350,10 @@ function registrarPedido(corpo) {
     subtotal,
     coupon: desconto ? cupom.code : "",
     discount: desconto,
-    total: subtotal - desconto
+    deliveryFee: entrega.taxa,
+    deliveryKm: entrega.km,
+    deliveryZone: entrega.zona,
+    total: subtotal - desconto + entrega.taxa
   };
   state.orders = [novo, ...state.orders];
   if (mesa) mesa.items = [...(mesa.items || []), ...conferidos];
@@ -287,10 +390,56 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === "/api/order" && req.method === "POST") {
     try {
-      return sendJson(res, 200, { pedido: registrarPedido(await readBody(req)), estado: estadoPara(false) });
+      return sendJson(res, 200, { pedido: await registrarPedido(await readBody(req)), estado: estadoPara(false) });
     } catch (error) {
       return sendJson(res, 400, { erro: error.message });
     }
+  }
+
+  /* Busca de endereco e mapa passam pelo servidor: o token nunca vai ao navegador. */
+  if (pathname === "/api/entrega/buscar") {
+    const q = (url.parse(req.url, true).query.q || "").toString().trim();
+    if (q.length < 3) return sendJson(res, 200, { resultados: [] });
+    try {
+      return sendJson(res, 200, { resultados: await geocodificar(q) });
+    } catch (error) {
+      return sendJson(res, 502, { erro: error.message });
+    }
+  }
+
+  if (pathname === "/api/entrega/taxa") {
+    const q = (url.parse(req.url, true).query.q || "").toString().trim();
+    if (q.length < 3) return sendJson(res, 400, { erro: "endereco muito curto" });
+    try {
+      const achados = await geocodificar(q);
+      if (!achados.length) return sendJson(res, 404, { erro: "endereco nao encontrado" });
+      return sendJson(res, 200, taxaParaEndereco(q, achados[0]));
+    } catch (error) {
+      return sendJson(res, 502, { erro: error.message });
+    }
+  }
+
+  if (pathname === "/api/entrega/mapa") {
+    const token = tokenMapbox();
+    const loja = state.delivery || {};
+    if (!token || loja.lng == null) return sendJson(res, 404, { erro: "mapa indisponivel" });
+    const raios = (loja.zones || []).map(z => Number(z.km)).filter(Boolean);
+    const zoom = raios.length ? Math.max(9, 14 - Math.log2(Math.max(...raios) || 1)) : 14;
+    const pino = `pin-l-restaurant+c97443(${loja.lng},${loja.lat})`;
+    const alvo = `${MAPBOX_API}/styles/v1/mapbox/dark-v11/static/${pino}/${loja.lng},${loja.lat},${zoom.toFixed(1)}/640x420@2x?access_token=${token}&attribution=true&logo=true`;
+    try {
+      const imagem = await fetch(alvo);
+      if (!imagem.ok) return sendJson(res, 502, { erro: `Mapbox respondeu ${imagem.status}` });
+      const buffer = Buffer.from(await imagem.arrayBuffer());
+      res.writeHead(200, { "Content-Type": "image/png", "Content-Length": buffer.length, "Cache-Control": "no-store" });
+      return res.end(buffer);
+    } catch (error) {
+      return sendJson(res, 502, { erro: error.message });
+    }
+  }
+
+  if (pathname === "/api/entrega/status") {
+    return sendJson(res, 200, { configurado: Boolean(tokenMapbox()) });
   }
 
   if (pathname === "/api/patch" && req.method === "POST") {

@@ -35,6 +35,7 @@
       <button class="nav-item" data-tab="mesas" onclick="showAdminTab('mesas')"><span class="nav-icon">▢</span>Mesas (salao)</button>
       <button class="nav-item" data-tab="produtos" onclick="showAdminTab('produtos')"><span class="nav-icon">◱</span>Produtos</button>
       <button class="nav-item" data-tab="promos" onclick="showAdminTab('promos')"><span class="nav-icon">✦</span>Promocoes</button>
+      <button class="nav-item" data-tab="entrega" onclick="showAdminTab('entrega')"><span class="nav-icon">◈</span>Area de entrega</button>
       <button class="nav-item" data-tab="estoque" onclick="showAdminTab('estoque')"><span class="nav-icon">▤</span>Estoque</button>
       <button class="nav-item" data-tab="dashboard" onclick="showAdminTab('dashboard')"><span class="nav-icon">◔</span>Dashboard</button>
     </nav>
@@ -189,6 +190,14 @@
           </div>
         </section>
       </div>
+    </section>
+
+    <section class="admin-tab hidden" id="tab-entrega">
+      <div class="tab-guide">
+        <strong>Como usar esta aba</strong>
+        <p>Marque onde fica a loja e crie faixas de raio. A distancia e medida em linha reta a partir da loja, e o cliente paga a taxa da primeira faixa que alcanca. Endereco alem da ultima faixa e recusado no carrinho.</p>
+      </div>
+      <div id="entrega-painel"></div>
     </section>
 
     <section class="admin-tab hidden" id="tab-estoque">
