@@ -1,6 +1,11 @@
-/* Ponto de entrada: abre o banco, aplica migrations, sobe o servidor. */
+/* Ponto de entrada: abre o pool, aplica migrations, sobe o servidor.
+ *
+ * A ordem importa e mudou com o Postgres. Antes o SQLite abria de imediato e o
+ * `listen` podia vir junto; agora migrar() e uma ida a rede, e subir o servidor
+ * antes dela deixaria uma janela em que a API responde com tabela inexistente.
+ * Por isso o await vem primeiro e o listen so acontece depois. */
 import { env } from "./config/env.js";
-import { abrirBanco, fecharBanco } from "./db/connection.js";
+import { abrirPool, fecharPool } from "./db/postgres.js";
 import { migrar } from "./db/migrate.js";
 import { criarApp } from "./app.js";
 import { logger } from "./lib/logger.js";
@@ -8,47 +13,70 @@ import { iniciarPing } from "./lib/events.js";
 import { sessoesRepo } from "./repositories/sessoes.repo.js";
 import { usuariosRepo } from "./repositories/usuarios.repo.js";
 import { limparFalhasVencidas } from "./services/auth.service.js";
-import { fazerBackup } from "./db/backup.js";
 
-abrirBanco();
-migrar();
+/* Falhar aqui e melhor do que subir e responder 500 em toda rota: sem banco o
+ * sistema nao serve para nada, e o host reinicia o processo. */
+try {
+  abrirPool();
+  await migrar();
+} catch (erro) {
+  logger.error("Nao foi possivel preparar o banco", { erro: erro.message });
+  await fecharPool();
+  process.exit(1);
+}
 
 const app = criarApp();
 const servidor = app.listen(env.PORT, () => {
   logger.info(`Baixo K no ar em http://localhost:${env.PORT}`, {
     ambiente: env.NODE_ENV,
-    banco: env.DB_FILE
+    banco: "postgres"
   });
-
-  /* Instalacao nova sem ninguem cadastrado nao pode ficar em silencio: sem esse
-   * aviso, o primeiro login e impossivel e nao ha pista do porque. */
-  if (usuariosRepo.contarAdminsAtivos() === 0) {
-    logger.warn("Nenhum administrador cadastrado. Rode `npm run seed` para criar o primeiro acesso.");
-  }
 });
+
+/* Instalacao nova sem ninguem cadastrado nao pode ficar em silencio: sem esse
+ * aviso, o primeiro login e impossivel e nao ha pista do porque.
+ *
+ * Fora do callback do listen porque agora e assincrono — e a consulta nao pode
+ * atrasar a abertura da porta. */
+if ((await usuariosRepo.contarAdminsAtivos()) === 0) {
+  logger.warn("Nenhum administrador cadastrado. Rode `npm run seed` para criar o primeiro acesso.");
+}
 
 iniciarPing();
 
-/* Faxina de hora em hora: sessao vencida, trava de login expirada e o backup
- * diario do banco. */
+/* Faxina de hora em hora: sessao vencida e trava de login expirada.
+ *
+ * O backup diario saiu junto com o SQLite. O banco agora e o Postgres do
+ * Supabase, que faz backup no proprio painel (Database -> Backups); um
+ * `VACUUM INTO` local nao existe la, e copiar a base inteira de hora em hora
+ * pela rede seria pior do que o que o Supabase ja garante. */
 const faxina = setInterval(() => {
-  const removidas = sessoesRepo.limparVencidas();
-  limparFalhasVencidas();
-  fazerBackup();
-  if (removidas) logger.debug("Sessoes vencidas removidas", { removidas });
+  void (async () => {
+    try {
+      const removidas = await sessoesRepo.limparVencidas();
+      limparFalhasVencidas();
+      if (removidas) logger.debug("Sessoes vencidas removidas", { removidas });
+    } catch (erro) {
+      /* Faxina que falha nao pode derrubar a loja: registra e tenta na proxima. */
+      logger.error("Falha na faxina periodica", { erro: erro.message });
+    }
+  })();
 }, 60 * 60 * 1000);
 faxina.unref();
 
-fazerBackup();
-
-function encerrar(sinal) {
+let encerrando = false;
+async function encerrar(sinal) {
+  if (encerrando) return;
+  encerrando = true;
   logger.info(`Encerrando (${sinal})`);
-  servidor.close(() => {
-    fecharBanco();
-    process.exit(0);
-  });
+
   /* Se alguma conexao SSE nao fechar sozinha, nao ficamos presos para sempre. */
-  setTimeout(() => process.exit(0), 5000).unref();
+  const prazo = setTimeout(() => process.exit(0), 5000);
+  prazo.unref();
+
+  await new Promise(resolve => servidor.close(resolve));
+  await fecharPool();
+  process.exit(0);
 }
 
 process.on("SIGINT", () => encerrar("SIGINT"));

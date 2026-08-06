@@ -81,13 +81,14 @@ O passo a passo completo — inclusive o que apagar depois — esta em
 
 ## Backup
 
-O banco fica em `data/baixok.sqlite`. Uma copia por dia vai para `data/backups/`,
-mantendo as ultimas 14, feita com `VACUUM INTO` — que produz arquivo consistente
-mesmo com a loja vendendo.
+O banco e o Postgres do projeto no Supabase, e o backup e de la: painel do
+Supabase -> **Database** -> **Backups**. O processo do backend nao copia mais
+nada sozinho — a rotina diaria com `VACUUM INTO` saiu junto com o arquivo
+`data/baixok.sqlite`.
 
-Isso protege contra arquivo corrompido e contra apagar sem querer. **Nao protege
-contra o computador queimar.** Copie a pasta `data/` para outro lugar de tempos
-em tempos.
+Confira no painel qual a retencao do seu plano. Se o historico de vendas precisa
+durar mais do que isso, exporte um `pg_dump` de tempos em tempos para fora do
+Supabase.
 
 ## Comanda de mesa por QR code
 

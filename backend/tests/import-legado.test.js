@@ -8,13 +8,20 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { prepararSchema, temBancoDeTeste, AVISO_SEM_BANCO } from "./apoio/banco.js";
+
+if (!temBancoDeTeste) {
+  test("suite do importador", { skip: AVISO_SEM_BANCO }, () => {});
+  process.exit(0);
+}
 
 const PASTA = fs.mkdtempSync(path.join(os.tmpdir(), "baixok-import-"));
+const banco = await prepararSchema("import");
 process.env.NODE_ENV = "test";
 process.env.DATA_DIR = PASTA;
 process.env.LOG_LEVEL = "silent";
 
-const { abrirBanco, fecharBanco, getDb } = await import("../src/db/connection.js");
+const { abrirPool, fecharPool, um, todos } = await import("../src/db/postgres.js");
 const { importar } = await import("../src/db/import-legado.js");
 
 /* Arquivo no formato do sistema antigo, com os casos-limite que aparecem em
@@ -75,103 +82,103 @@ const LEGADO = {
 const arquivo = path.join(PASTA, "baixo-k.json");
 fs.writeFileSync(arquivo, JSON.stringify(LEGADO), "utf8");
 
-abrirBanco();
-const contagem = importar(arquivo);
-const db = getDb();
+abrirPool();
+const contagem = await importar(arquivo);
 
-test.after(() => {
-  fecharBanco();
+test.after(async () => {
+  await fecharPool();
+  await banco.derrubar();
   fs.rmSync(PASTA, { recursive: true, force: true });
 });
 
-test("importa produtos validos e descarta os quebrados", () => {
+test("importa produtos validos e descarta os quebrados", async () => {
   assert.equal(contagem.produtos, 4, "os 4 com id entram; o sem id fica de fora");
-  const nomes = db.prepare("SELECT nome FROM produtos ORDER BY nome").all().map(linha => linha.nome);
+  const nomes = (await todos("SELECT nome FROM produtos ORDER BY nome")).map(linha => linha.nome);
   assert.ok(!nomes.includes("Sem id"));
 });
 
-test("imagem com javascript: nao entra no banco", () => {
-  const produto = db.prepare("SELECT imagem FROM produtos WHERE id = 'item-xss'").get();
+test("imagem com javascript: nao entra no banco", async () => {
+  const produto = await um("SELECT imagem FROM produtos WHERE id = 'item-xss'");
   assert.equal(produto.imagem, "", "so caminho do site ou data URL passa");
 });
 
-test("imagem valida do proprio site e preservada", () => {
-  const produto = db.prepare("SELECT imagem FROM produtos WHERE id = 'burguer-bacon'").get();
+test("imagem valida do proprio site e preservada", async () => {
+  const produto = await um("SELECT imagem FROM produtos WHERE id = 'burguer-bacon'");
   assert.equal(produto.imagem, "images/produto-burguer.png");
 });
 
-test("categoria desconhecida cai num valor aceito em vez de derrubar", () => {
-  const produto = db.prepare("SELECT categoria FROM produtos WHERE id = 'item-orfao'").get();
+test("categoria desconhecida cai num valor aceito em vez de derrubar", async () => {
+  const produto = await um("SELECT categoria FROM produtos WHERE id = 'item-orfao'");
   assert.equal(produto.categoria, "porcoes");
 });
 
-test("status 'concluido' da versao antiga vira 'entregue'", () => {
-  const pedido = db.prepare("SELECT status FROM pedidos WHERE id = 'ped-1'").get();
+test("status 'concluido' da versao antiga vira 'entregue'", async () => {
+  const pedido = await um("SELECT status FROM pedidos WHERE id = 'ped-1'");
   assert.equal(pedido.status, "entregue");
 });
 
-test("pedido sem id e ignorado, os demais entram", () => {
+test("pedido sem id e ignorado, os demais entram", async () => {
   assert.equal(contagem.pedidos, 3);
-  assert.equal(db.prepare("SELECT COUNT(*) AS total FROM pedidos").get().total, 3);
+  assert.equal((await um("SELECT COUNT(*)::int AS total FROM pedidos")).total, 3);
 });
 
-test("item de produto apagado mantem o pedido, perdendo so o vinculo", () => {
-  const itens = db.prepare("SELECT nome, produto_id FROM pedido_itens WHERE pedido_id = 'ped-2' ORDER BY nome").all();
+test("item de produto apagado mantem o pedido, perdendo so o vinculo", async () => {
+  const itens = await todos("SELECT nome, produto_id FROM pedido_itens WHERE pedido_id = 'ped-2' ORDER BY nome");
   assert.equal(itens.length, 2, "os dois itens precisam sobreviver");
 
   const orfao = itens.find(item => item.nome === "Combo Antigo");
   assert.equal(orfao.produto_id, null, "produto inexistente vira NULL, e o nome fica gravado na linha");
 });
 
-test("pedido sem data nem total entra com valores derivados", () => {
-  const pedido = db.prepare("SELECT criado_em, total, subtotal FROM pedidos WHERE id = 'ped-3'").get();
+test("pedido sem data nem total entra com valores derivados", async () => {
+  const pedido = await um("SELECT criado_em, total, subtotal FROM pedidos WHERE id = 'ped-3'");
   assert.ok(pedido.criado_em, "recebe o instante da importacao");
   assert.equal(pedido.subtotal, 39.9, "subtotal calculado a partir dos itens");
   assert.equal(pedido.total, 39.9);
 });
 
-test("pedidos antigos entram sem marca de estoque baixado", () => {
-  const linhas = db.prepare("SELECT estoque_baixado FROM pedidos").all();
+test("pedidos antigos entram sem marca de estoque baixado", async () => {
+  const linhas = await todos("SELECT estoque_baixado FROM pedidos");
   assert.ok(linhas.every(linha => linha.estoque_baixado === 0),
     "assumir a baixa faria um cancelamento devolver unidade que nunca saiu");
 });
 
-test("mesa referenciada e vinculada; pedido de mesa inexistente fica sem vinculo", () => {
+test("mesa referenciada e vinculada; pedido de mesa inexistente fica sem vinculo", async () => {
   assert.equal(contagem.mesas, 2);
-  assert.equal(db.prepare("SELECT mesa_n FROM pedidos WHERE id = 'ped-2'").get().mesa_n, 1);
-  assert.equal(db.prepare("SELECT mesa_n FROM pedidos WHERE id = 'ped-1'").get().mesa_n, null);
+  assert.equal((await um("SELECT mesa_n FROM pedidos WHERE id = 'ped-2'")).mesa_n, 1);
+  assert.equal((await um("SELECT mesa_n FROM pedidos WHERE id = 'ped-1'")).mesa_n, null);
 });
 
-test("promocao de produto inexistente e descartada", () => {
+test("promocao de produto inexistente e descartada", async () => {
   assert.equal(contagem.promocoes, 1);
-  assert.equal(db.prepare("SELECT COUNT(*) AS total FROM promocoes").get().total, 1);
+  assert.equal((await um("SELECT COUNT(*)::int AS total FROM promocoes")).total, 1);
 });
 
-test("cupom vira maiusculo e o sem valor e recusado", () => {
+test("cupom vira maiusculo e o sem valor e recusado", async () => {
   assert.equal(contagem.cupons, 1);
-  const cupom = db.prepare("SELECT * FROM cupons").get();
+  const cupom = await um("SELECT * FROM cupons");
   assert.equal(cupom.code, "BAIXO10");
   assert.equal(cupom.usos, 3, "o historico de usos e preservado");
   assert.equal(cupom.uso_unico, 1);
 });
 
-test("faixa com km zero e descartada e as demais ficam ordenadas", () => {
+test("faixa com km zero e descartada e as demais ficam ordenadas", async () => {
   assert.equal(contagem.faixas, 2);
-  const faixas = db.prepare("SELECT km FROM entrega_faixas ORDER BY km").all();
+  const faixas = await todos("SELECT km FROM entrega_faixas ORDER BY km");
   assert.deepEqual(faixas.map(faixa => faixa.km), [3, 6]);
 });
 
-test("coordenada da loja e preservada", () => {
-  const config = db.prepare("SELECT * FROM entrega_config WHERE id = 1").get();
+test("coordenada da loja e preservada", async () => {
+  const config = await um("SELECT * FROM entrega_config WHERE id = 1");
   assert.equal(config.lat, -22.8975);
   assert.equal(config.lng, -43.1875);
   assert.equal(config.endereco, "Sacadura Cabral, 10");
 });
 
-test("importar duas vezes nao duplica nada", () => {
-  const segunda = importar(arquivo);
+test("importar duas vezes nao duplica nada", async () => {
+  const segunda = await importar(arquivo);
   assert.equal(segunda.produtos, 0);
   assert.equal(segunda.pedidos, 0);
-  assert.equal(db.prepare("SELECT COUNT(*) AS total FROM pedidos").get().total, 3);
-  assert.equal(db.prepare("SELECT COUNT(*) AS total FROM pedido_itens").get().total, 4);
+  assert.equal((await um("SELECT COUNT(*)::int AS total FROM pedidos")).total, 3);
+  assert.equal((await um("SELECT COUNT(*)::int AS total FROM pedido_itens")).total, 4);
 });

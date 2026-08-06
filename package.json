@@ -7,9 +7,9 @@
     "backend",
     "frontend"
   ],
-  "comentario-engines": "node:sqlite (DatabaseSync, usado em backend/src/db/connection.js) so existe a partir do 22.5. Com o 20 declarado antes, um host que respeita este campo escolhia o 20 e o backend morria na subida com 'Cannot find module node:sqlite'.",
+  "comentario-engines": "Era >=22.5 por causa do node:sqlite, que so existe a partir dessa versao. Com o banco no Postgres (backend/src/db/postgres.js) essa amarra sumiu; o piso agora e o 20.11, primeira LTS onde tudo o que o codigo usa — import.meta.dirname, fetch, AsyncLocalStorage, node:test — esta estavel.",
   "engines": {
-    "node": ">=22.5"
+    "node": ">=20.11"
   },
   "scripts": {
     "dev": "concurrently -n api,web -c cyan,magenta \"npm:dev:api\" \"npm:dev:web\"",

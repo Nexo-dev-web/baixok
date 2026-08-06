@@ -44,7 +44,8 @@ const schema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(8000),
 
   /* Fora da arvore do codigo de proposito: nada em DATA_DIR pode ser alcancavel
-   * por uma rota estatica, nem por engano. */
+   * por uma rota estatica, nem por engano. Depois da migracao para o Postgres
+   * sobrou so como destino de upload — o banco nao mora mais aqui. */
   DATA_DIR: z.string().default(path.join(RAIZ_BACKEND, "..", "data")),
 
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
@@ -66,8 +67,12 @@ const schema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(10).optional(),
   SUPABASE_INSECURE_TLS: booleano.optional(),
 
-  /* Cadeia de conexao do Postgres do Supabase (db/postgres.js). E a mesma
-   * SUPABASE_DATABASE_URL que a extensao do Supabase ja publica no Netlify.
+  /* Cadeia de conexao do Postgres do Supabase (db/postgres.js). E o unico banco
+   * do sistema desde que o node:sqlite saiu, entao sem ela o processo nao tem o
+   * que servir — o abrirPool() derruba a subida com a mensagem explicando.
+   * Continua `optional()` aqui para o erro vir de la, apontando o arquivo certo,
+   * em vez de virar um "Configuracao invalida" generico.
+   *
    * Use o pooler, nao a conexao direta: cada instancia do backend abre um pool
    * proprio e o limite de conexoes do projeto estoura rapido sem ele. */
   SUPABASE_DATABASE_URL: z.string().url().optional(),
@@ -103,8 +108,6 @@ export const env = Object.freeze({
   ehProducao: resultado.data.NODE_ENV === "production",
   ehTeste: resultado.data.NODE_ENV === "test",
   SUPABASE_INSECURE_TLS: resultado.data.SUPABASE_INSECURE_TLS ?? resultado.data.NODE_ENV !== "production",
-  DB_FILE: path.join(resultado.data.DATA_DIR, "baixok.sqlite"),
-  BACKUP_DIR: path.join(resultado.data.DATA_DIR, "backups"),
   UPLOADS_DIR: path.join(resultado.data.DATA_DIR, "uploads"),
   SESSION_TTL_MS: resultado.data.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000
 });

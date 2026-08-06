@@ -10,13 +10,18 @@
  * 1. CORRIDA DE ESTOQUE. Havia um `await geocodificar()` entre conferir o
  *    estoque e baixa-lo. Dois pedidos simultaneos passavam pela mesma
  *    verificacao e a casa vendia o que nao tinha. Agora toda chamada de rede
- *    acontece ANTES, e a conferencia + baixa ficam numa transacao sincrona onde
- *    o proprio UPDATE recusa quando o saldo nao cobre.
+ *    acontece ANTES, e a conferencia + baixa ficam numa transacao onde o
+ *    proprio UPDATE recusa quando o saldo nao cobre.
  *
  * 2. CUPOM CONTAVA USO SEM SER USADO. `cupom.uses += 1` rodava assim que o
  *    cupom era encontrado, mesmo que o pedido fosse recusado logo depois por
- *    endereco fora da area. Agora o uso e registrado no fim, junto do pedido. */
-import { emTransacao } from "../db/connection.js";
+ *    endereco fora da area. Agora o uso e registrado no fim, junto do pedido.
+ *
+ * Sobre o `await` dentro de emTransacao: com o Postgres toda consulta e
+ * assincrona, entao a regra de "nada de rede no meio da transacao" deixou de
+ * ser imposta pela linguagem e passou a valer por disciplina. Nenhuma chamada a
+ * Mapbox ou a qualquer API externa pode entrar nos blocos abaixo. */
+import { emTransacao } from "../db/postgres.js";
 import { pedidosRepo } from "../repositories/pedidos.repo.js";
 import { produtosRepo } from "../repositories/produtos.repo.js";
 import { promocoesRepo } from "../repositories/promocoes.repo.js";
@@ -30,32 +35,34 @@ import { idPedido } from "../lib/ids.js";
 import { STATUS_ABERTOS } from "../config/constants.js";
 
 /* Precifica os itens pelo cadastro, ignorando qualquer preco que tenha vindo do
- * cliente. Sincrona: roda dentro da transacao. */
-function precificar(itens) {
-  const promocoes = new Map(promocoesRepo.listar().map(promo => [promo.productId, promo.price]));
+ * cliente. Roda dentro da transacao. */
+async function precificar(itens) {
+  const promocoes = new Map((await promocoesRepo.listar()).map(promo => [promo.productId, promo.price]));
 
-  return itens.map(item => {
-    const produto = produtosRepo.buscar(item.id);
+  const precificados = [];
+  for (const item of itens) {
+    const produto = await produtosRepo.buscar(item.id);
     if (!produto) throw new ErroApp(`Produto fora do cardapio.`, 400, "produto_invalido");
     if (!produto.active) throw new ErroApp(`${produto.name} esta pausado no momento.`, 409, "produto_pausado");
 
     const promocional = promocoes.get(produto.id);
-    return {
+    precificados.push({
       id: produto.id,
       name: produto.name,
       qty: item.qty,
       price: promocional != null ? Number(promocional) : Number(produto.price)
-    };
-  });
+    });
+  }
+  return precificados;
 }
 
 /* Baixa o estoque item a item. O UPDATE traz `WHERE estoque >= ?` embutido:
- * se outro pedido levou a ultima unidade um instante antes, `changes` volta 0,
+ * se outro pedido levou a ultima unidade um instante antes, o rowCount volta 0,
  * lancamos, e a transacao inteira e desfeita — inclusive as baixas anteriores. */
-function baixarEstoque(itens) {
+async function baixarEstoque(itens) {
   for (const item of itens) {
-    if (!produtosRepo.baixarEstoque(item.id, item.qty)) {
-      const atual = produtosRepo.buscar(item.id);
+    if (!(await produtosRepo.baixarEstoque(item.id, item.qty))) {
+      const atual = await produtosRepo.buscar(item.id);
       throw new ErroApp(
         `${item.name}: restam ${atual?.stock ?? 0} unidades.`,
         409,
@@ -70,8 +77,8 @@ export const pedidosService = {
   listarAbertos: () => pedidosRepo.listarAbertos(),
   listarParaTelao: () => pedidosRepo.listarParaTelao(),
 
-  buscar(id) {
-    const pedido = pedidosRepo.buscar(id);
+  async buscar(id) {
+    const pedido = await pedidosRepo.buscar(id);
     if (!pedido) throw naoEncontrado("Pedido nao encontrado.");
     return pedido;
   },
@@ -79,11 +86,11 @@ export const pedidosService = {
   /* Pedido vindo do cardapio do cliente (rota publica). */
   async criarPublico(dados, { ip }) {
     /* Passo 1 — rede fora da transacao.
-     * A cotacao de entrega precisa da Mapbox; deixa-la aqui e o que permite que
-     * o passo 2 seja inteiramente sincrono. */
+     * A cotacao de entrega precisa da Mapbox; deixa-la aqui e o que mantem o
+     * passo 2 falando so com o banco. */
     let entrega = { taxa: 0, km: null, zona: null, minimo: 0 };
     if (dados.fulfillment === "entrega") {
-      const config = entregaService.config();
+      const config = await entregaService.config();
       if (config.zones.length) {
         if (!dados.place) throw new ErroApp("Informe o endereco de entrega.", 400, "endereco_ausente");
         const cotacao = await entregaService.cotarPorEndereco(dados.place);
@@ -94,20 +101,20 @@ export const pedidosService = {
       }
     }
 
-    /* Passo 2 — tudo o mais numa transacao sincrona. */
-    const pedido = emTransacao(() => {
+    /* Passo 2 — tudo o mais numa transacao, sem nenhuma chamada externa. */
+    const pedido = await emTransacao(async () => {
       if (dados.tableNumber != null) {
-        const mesa = mesasRepo.buscar(dados.tableNumber);
+        const mesa = await mesasRepo.buscar(dados.tableNumber);
         if (!mesa || mesa.status !== "aberta") {
           throw new ErroApp("A comanda desta mesa nao esta aberta.", 409, "mesa_fechada");
         }
       }
 
-      const itens = precificar(dados.items);
+      const itens = await precificar(dados.items);
       const subtotal = itens.reduce((soma, item) => soma + item.price * item.qty, 0);
 
       const cupom = dados.coupon
-        ? cuponsService.avaliar({ code: dados.coupon, subtotal, telefone: dados.phone })
+        ? await cuponsService.avaliar({ code: dados.coupon, subtotal, telefone: dados.phone })
         : { valido: false, desconto: 0 };
 
       /* Cupom invalido nao derruba o pedido: entra sem desconto, como o sistema
@@ -123,9 +130,9 @@ export const pedidosService = {
         );
       }
 
-      baixarEstoque(itens);
+      await baixarEstoque(itens);
 
-      const novo = pedidosRepo.inserir({
+      const novo = await pedidosRepo.inserir({
         id: idPedido(),
         createdAt: new Date().toISOString(),
         status: "novo",
@@ -152,15 +159,15 @@ export const pedidosService = {
       });
 
       if (cupom.valido) {
-        cuponsService.registrarUso({ code: cupom.code, pedidoId: novo.id, telefone: dados.phone });
+        await cuponsService.registrarUso({ code: cupom.code, pedidoId: novo.id, telefone: dados.phone });
       }
       if (dados.tableNumber != null) {
-        mesasRepo.adicionarItens(dados.tableNumber, novo.id, itens);
+        await mesasRepo.adicionarItens(dados.tableNumber, novo.id, itens);
       }
       return novo;
     });
 
-    auditoriaRepo.registrar({
+    await auditoriaRepo.registrar({
       acao: "pedido_criado", entidade: "pedido", entidadeId: pedido.id,
       detalhes: { canal: "cardapio", total: pedido.total, itens: pedido.items.length }, ip
     });
@@ -169,19 +176,19 @@ export const pedidosService = {
   },
 
   /* Lancamento manual pelo balcao: iFood, WhatsApp, venda de salao. */
-  criarManual(dados, { usuario, ip }) {
-    const pedido = emTransacao(() => {
+  async criarManual(dados, { usuario, ip }) {
+    const pedido = await emTransacao(async () => {
       if (dados.tableNumber != null) {
-        const mesa = mesasRepo.buscar(dados.tableNumber);
+        const mesa = await mesasRepo.buscar(dados.tableNumber);
         if (!mesa) throw naoEncontrado("Mesa nao encontrada.");
         if (mesa.status !== "aberta") throw conflito("Abra a comanda da mesa antes de lancar o pedido.");
       }
 
-      const itens = precificar(dados.items);
+      const itens = await precificar(dados.items);
       const subtotal = itens.reduce((soma, item) => soma + item.price * item.qty, 0);
-      baixarEstoque(itens);
+      await baixarEstoque(itens);
 
-      const novo = pedidosRepo.inserir({
+      const novo = await pedidosRepo.inserir({
         id: idPedido(),
         createdAt: new Date().toISOString(),
         status: "novo",
@@ -207,11 +214,11 @@ export const pedidosService = {
         createdBy: usuario.id
       });
 
-      if (dados.tableNumber != null) mesasRepo.adicionarItens(dados.tableNumber, novo.id, itens);
+      if (dados.tableNumber != null) await mesasRepo.adicionarItens(dados.tableNumber, novo.id, itens);
       return novo;
     });
 
-    auditoriaRepo.registrar({
+    await auditoriaRepo.registrar({
       usuarioId: usuario.id, usuario: usuario.usuario, acao: "pedido_lancado",
       entidade: "pedido", entidadeId: pedido.id,
       detalhes: { canal: dados.channel, total: pedido.total, mesa: dados.tableNumber }, ip
@@ -220,15 +227,15 @@ export const pedidosService = {
     return pedido;
   },
 
-  mudarStatus(id, status, { usuario, ip }) {
-    const atual = this.buscar(id);
+  async mudarStatus(id, status, { usuario, ip }) {
+    const atual = await this.buscar(id);
     if (atual.status === status) return atual;
 
     /* Cancelar tem regra propria (devolve estoque), entao nao entra por aqui. */
     if (status === "cancelado") return this.cancelar(id, "", { usuario, ip });
 
-    const pedido = pedidosRepo.atualizarStatus(id, status);
-    auditoriaRepo.registrar({
+    const pedido = await pedidosRepo.atualizarStatus(id, status);
+    await auditoriaRepo.registrar({
       usuarioId: usuario.id, usuario: usuario.usuario, acao: "pedido_status",
       entidade: "pedido", entidadeId: id, detalhes: { de: atual.status, para: status }, ip
     });
@@ -240,22 +247,22 @@ export const pedidosService = {
    * `estoque_baixado` e o que impede o clique repetido de devolver duas vezes e
    * inflar o estoque — no sistema antigo essa marca existia mas nao era checada
    * de forma atomica. */
-  cancelar(id, motivo, { usuario, ip }) {
-    const pedido = emTransacao(() => {
-      const atual = pedidosRepo.buscar(id);
+  async cancelar(id, motivo, { usuario, ip }) {
+    const pedido = await emTransacao(async () => {
+      const atual = await pedidosRepo.buscar(id);
       if (!atual) throw naoEncontrado("Pedido nao encontrado.");
       if (atual.status === "cancelado") throw conflito("Este pedido ja esta cancelado.");
 
       if (atual.stockDeducted) {
         for (const item of atual.items) {
-          if (item.id) produtosRepo.devolverEstoque(item.id, item.qty);
+          if (item.id) await produtosRepo.devolverEstoque(item.id, item.qty);
         }
-        pedidosRepo.marcarEstoqueDevolvido(id);
+        await pedidosRepo.marcarEstoqueDevolvido(id);
       }
       return pedidosRepo.atualizarStatus(id, "cancelado");
     });
 
-    auditoriaRepo.registrar({
+    await auditoriaRepo.registrar({
       usuarioId: usuario.id, usuario: usuario.usuario, acao: "pedido_cancelado",
       entidade: "pedido", entidadeId: id, detalhes: { motivo, total: pedido.total }, ip
     });
@@ -263,13 +270,13 @@ export const pedidosService = {
     return pedido;
   },
 
-  marcarImpresso(id) {
-    pedidosRepo.marcarImpresso(id);
+  async marcarImpresso(id) {
+    await pedidosRepo.marcarImpresso(id);
   },
 
   /* Metricas da barra do topo do painel. */
-  resumoDoDia() {
-    const abertos = pedidosRepo.listarAbertos();
+  async resumoDoDia() {
+    const abertos = await pedidosRepo.listarAbertos();
     return {
       abertos: abertos.length,
       porStatus: Object.fromEntries(

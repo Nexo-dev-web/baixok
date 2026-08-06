@@ -29,10 +29,14 @@ function listaAbas(usuario, modo = "ver") {
 }
 
 /* Popula req.sessao quando ha cookie valido, e segue adiante de qualquer jeito.
- * Roda em tudo, inclusive nas rotas publicas. */
-export function carregarSessao(req, _res, next) {
+ * Roda em tudo, inclusive nas rotas publicas.
+ *
+ * Sem cookie o resolverSessao devolve null antes de tocar o banco. Isso importa
+ * agora: com o Postgres cada consulta e uma ida a rede, e o visitante do
+ * cardapio — que e a maioria — nao paga nada por este middleware. */
+export async function carregarSessao(req, _res, next) {
   const token = req.cookies?.[env.SESSION_COOKIE_NAME];
-  req.sessao = authService.resolverSessao(token);
+  req.sessao = await authService.resolverSessao(token);
   req.usuario = req.sessao?.usuario || null;
   req.tokenSessao = token || null;
   next();

@@ -34,14 +34,18 @@ async function resolverAuthId(usuario) {
 
 /* Guarda contra o sistema ficar sem ninguem capaz de administrar: rebaixar ou
  * desativar o ultimo admin ativo deixaria a loja sem quem cadastre usuario,
- * mexa em cupom ou configure entrega. */
-function garantirQueSobraAdmin(alvo, mudanca) {
+ * mexa em cupom ou configure entrega.
+ *
+ * O `await` no contarAdminsAtivos nao e detalhe: com o repositorio assincrono e
+ * a chamada sem await, a comparacao era `Promise <= 1`, que da NaN <= 1, que e
+ * sempre falso. A trava existia no codigo e nunca disparava. */
+async function garantirQueSobraAdmin(alvo, mudanca) {
   const perdendoAdmin =
     alvo.papel === PAPEIS.ADMIN &&
     alvo.ativo &&
     ((mudanca.papel && mudanca.papel !== PAPEIS.ADMIN) || mudanca.ativo === false);
 
-  if (perdendoAdmin && usuariosRepo.contarAdminsAtivos() <= 1) {
+  if (perdendoAdmin && (await usuariosRepo.contarAdminsAtivos()) <= 1) {
     throw conflito("Este e o unico administrador ativo. Promova outra pessoa antes.");
   }
 }
@@ -49,14 +53,14 @@ function garantirQueSobraAdmin(alvo, mudanca) {
 export const usuariosService = {
   listar: () => usuariosRepo.listar(),
 
-  buscar(id) {
-    const usuario = usuariosRepo.buscar(id);
+  async buscar(id) {
+    const usuario = await usuariosRepo.buscar(id);
     if (!usuario) throw naoEncontrado("Usuario nao encontrado.");
     return usuario;
   },
 
   async criar(dados, { usuario: autor, ip }) {
-    if (usuariosRepo.buscarPorUsuario(dados.usuario)) {
+    if (await usuariosRepo.buscarPorUsuario(dados.usuario)) {
       throw conflito("Ja existe alguem com esse nome de usuario.");
     }
     if (supabaseAuth.ativo()) {
@@ -82,7 +86,7 @@ export const usuariosService = {
 
     let criado;
     try {
-      criado = usuariosRepo.criar({
+      criado = await usuariosRepo.criar({
         usuario: dados.usuario,
         nome: dados.nome,
         senhaHash,
@@ -104,7 +108,7 @@ export const usuariosService = {
       }
       throw erro;
     }
-    auditoriaRepo.registrar({
+    await auditoriaRepo.registrar({
       usuarioId: autor.id, usuario: autor.usuario, acao: "usuario_criado",
       entidade: "usuario", entidadeId: criado.id, detalhes: { usuario: criado.usuario, papel: criado.papel }, ip
     });
@@ -112,8 +116,8 @@ export const usuariosService = {
   },
 
   async atualizar(id, dados, { usuario: autor, ip }) {
-    const alvo = this.buscar(id);
-    garantirQueSobraAdmin(alvo, dados);
+    const alvo = await this.buscar(id);
+    await garantirQueSobraAdmin(alvo, dados);
 
     /* Ninguem muda o proprio papel: um caixa que conseguisse chamar esta rota se
      * promoveria a admin sozinho. Trocar de papel exige outra pessoa admin. */
@@ -123,7 +127,7 @@ export const usuariosService = {
 
     const abasVer = dados.abasVer === undefined ? undefined : normalizarLista(dados.abasVer, []);
     const abasEditar = dados.abasEditar === undefined ? undefined : normalizarLista(dados.abasEditar, []);
-    const atualizado = usuariosRepo.atualizar(id, { ...dados, abasVer, abasEditar });
+    const atualizado = await usuariosRepo.atualizar(id, { ...dados, abasVer, abasEditar });
 
     if (supabaseAuth.ativo()) {
       const authId = await resolverAuthId(atualizado);
@@ -146,9 +150,9 @@ export const usuariosService = {
     }
 
     /* Desativar derruba as sessoes na hora, sem esperar os 30 dias. */
-    if (dados.ativo === false) sessoesRepo.removerDoUsuario(id);
+    if (dados.ativo === false) await sessoesRepo.removerDoUsuario(id);
 
-    auditoriaRepo.registrar({
+    await auditoriaRepo.registrar({
       usuarioId: autor.id, usuario: autor.usuario, acao: "usuario_alterado",
       entidade: "usuario", entidadeId: id, detalhes: dados, ip
     });
@@ -156,34 +160,34 @@ export const usuariosService = {
   },
 
   async redefinirSenha(id, senha, { usuario: autor, ip }) {
-    const alvo = this.buscar(id);
+    const alvo = await this.buscar(id);
     if (supabaseAuth.ativo()) {
       const authId = await resolverAuthId(alvo);
       if (authId) {
         await supabaseAuth.atualizarSenha(authId, senha);
       }
     }
-    usuariosRepo.trocarSenha(id, await gerarHashSenha(senha));
-    const derrubadas = sessoesRepo.removerDoUsuario(id);
+    await usuariosRepo.trocarSenha(id, await gerarHashSenha(senha));
+    const derrubadas = await sessoesRepo.removerDoUsuario(id);
 
-    auditoriaRepo.registrar({
+    await auditoriaRepo.registrar({
       usuarioId: autor.id, usuario: autor.usuario, acao: "senha_redefinida",
       entidade: "usuario", entidadeId: id, detalhes: { alvo: alvo.usuario, sessoesEncerradas: derrubadas }, ip
     });
   },
 
   async remover(id, { usuario: autor, ip }) {
-    const alvo = this.buscar(id);
+    const alvo = await this.buscar(id);
     if (alvo.id === autor.id) throw conflito("Voce nao pode remover o proprio usuario.");
-    garantirQueSobraAdmin(alvo, { ativo: false });
+    await garantirQueSobraAdmin(alvo, { ativo: false });
 
-    sessoesRepo.removerDoUsuario(id);
+    await sessoesRepo.removerDoUsuario(id);
     if (supabaseAuth.ativo()) {
       const authId = await resolverAuthId(alvo);
       if (authId) await supabaseAuth.removerUsuario(authId);
     }
-    usuariosRepo.remover(id);
-    auditoriaRepo.registrar({
+    await usuariosRepo.remover(id);
+    await auditoriaRepo.registrar({
       usuarioId: autor.id, usuario: autor.usuario, acao: "usuario_removido",
       entidade: "usuario", entidadeId: id, detalhes: { usuario: alvo.usuario }, ip
     });

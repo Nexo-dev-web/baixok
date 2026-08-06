@@ -19,8 +19,10 @@ function inicioDoDiaOperacional(quando = new Date()) {
   return inicio;
 }
 
-/* SQLite compara datas como texto, e as colunas guardam ISO. Normalizamos para
- * 'AAAA-MM-DD HH:MM:SS' para a comparacao funcionar com datetime('now'). */
+/* 'AAAA-MM-DD HH:MM:SS' e o formato que o repositorio converte com
+ * `?::timestamptz` do lado do Postgres. Vem do tempo do SQLite, que comparava
+ * data como texto, e continua servindo: o cast entende o literal e a comparacao
+ * passa a ser entre timestamps de verdade. */
 const paraSql = data => data.toISOString().replace("T", " ").slice(0, 19);
 
 export function resolverPeriodo({ periodo, desde, ate }) {
@@ -47,12 +49,22 @@ export function resolverPeriodo({ periodo, desde, ate }) {
 }
 
 export const relatoriosService = {
-  dashboard({ periodo, desde, ate, canal }) {
+  async dashboard({ periodo, desde, ate, canal }) {
     const intervalo = resolverPeriodo({ periodo, desde, ate });
     const filtro = { desde: intervalo.desde, ate: intervalo.ate, canal: canal || null };
 
-    const resumo = pedidosRepo.resumoPeriodo(filtro);
-    const emFalta = produtosRepo.emFalta();
+    /* Sete agregacoes independentes. Em fila seriam sete idas ao Postgres, uma
+     * esperando a outra — o dashboard e a tela mais lenta do painel e nao ha
+     * ordem entre elas. */
+    const [resumo, emFalta, porHora, porCanal, porPagamento, porModalidade, maisVendidos] = await Promise.all([
+      pedidosRepo.resumoPeriodo(filtro),
+      produtosRepo.emFalta(),
+      pedidosRepo.porHora(filtro),
+      pedidosRepo.agruparPor("canal", filtro),
+      pedidosRepo.agruparPor("pagamento", filtro),
+      pedidosRepo.agruparPor("modalidade", filtro),
+      pedidosRepo.maisVendidos({ ...filtro, limite: 10 })
+    ]);
 
     return {
       periodo: intervalo,
@@ -63,11 +75,11 @@ export const relatoriosService = {
         descontos: Math.round(resumo.descontos * 100) / 100,
         taxasEntrega: Math.round(resumo.taxas_entrega * 100) / 100
       },
-      porHora: pedidosRepo.porHora(filtro),
-      porCanal: pedidosRepo.agruparPor("canal", filtro),
-      porPagamento: pedidosRepo.agruparPor("pagamento", filtro),
-      porModalidade: pedidosRepo.agruparPor("modalidade", filtro),
-      maisVendidos: pedidosRepo.maisVendidos({ ...filtro, limite: 10 }),
+      porHora,
+      porCanal,
+      porPagamento,
+      porModalidade,
+      maisVendidos,
       estoqueBaixo: emFalta.map(produto => ({
         id: produto.id, nome: produto.name, estoque: produto.stock, minimo: produto.minStock
       }))
@@ -77,9 +89,9 @@ export const relatoriosService = {
   /* Linhas cruas do periodo para a exportacao. Nao inclui telefone nem endereco:
    * a planilha de faturamento circula por e-mail e grupo de WhatsApp, e nao
    * precisa carregar dado pessoal de cliente junto. */
-  exportacao({ periodo, desde, ate, canal }) {
+  async exportacao({ periodo, desde, ate, canal }) {
     const intervalo = resolverPeriodo({ periodo, desde, ate });
-    const pedidos = pedidosRepo.listar({ desde: intervalo.desde, ate: intervalo.ate, limite: 1000 });
+    const pedidos = await pedidosRepo.listar({ desde: intervalo.desde, ate: intervalo.ate, limite: 1000 });
 
     return {
       periodo: intervalo,
