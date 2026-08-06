@@ -528,6 +528,11 @@ function setFulfillment(mode) {
     place.placeholder = "Endereco completo";
     if (mode === "retirada") place.value = "";
   }
+  if (mode === "entrega") montarBuscaEndereco();
+  else {
+    geocoderCliente?.clear();
+    limparCotacao();
+  }
 }
 function addToCart(id) {
   const product = getProducts().find(item => item.id === id);
@@ -560,9 +565,96 @@ function changeQty(id, delta) {
   saveCart(rows);
   renderCart();
 }
+/* — busca de endereco pela Mapbox —
+ * Usa o widget oficial (mapbox-gl-geocoder), que roda no navegador e precisa
+ * do token la. Token publico existe exatamente para isso. Se a loja tiver
+ * cadastrado um token secreto, ou se a CDN nao carregar, nada quebra: o
+ * servidor devolve token vazio e a busca volta a passar por ele. */
+let statusEntregaCache = null;
+
+async function statusEntrega() {
+  if (statusEntregaCache) return statusEntregaCache;
+  try {
+    statusEntregaCache = await (await fetch("/api/entrega/status")).json();
+  } catch {
+    statusEntregaCache = { configurado: false, token: "", origem: "", loja: null };
+  }
+  return statusEntregaCache;
+}
+
+/* Caixa em volta da loja, com folga sobre a maior faixa. Sem ela, "Rua
+ * Sacadura Cabral" traz o resultado de outra cidade no topo da lista. */
+function caixaDeBusca(loja, zones) {
+  if (!loja || loja.lat == null) return null;
+  const maiorKm = Math.max(5, ...(zones || []).map(zone => Number(zone.km) || 0));
+  const folga = maiorKm * 1.6;
+  const grausLat = folga / 111;
+  const grausLng = folga / (111 * Math.cos((loja.lat * Math.PI) / 180));
+  return [loja.lng - grausLng, loja.lat - grausLat, loja.lng + grausLng, loja.lat + grausLat];
+}
+/* Devolve o widget ja montado, ou null quando nao da para usar: sem token
+ * publico, sem a CDN, ou token com formato que a Mapbox recusa. Em qualquer
+ * um desses casos quem assume e o campo comum, que nunca sai da pagina. */
+function criarGeocoder(seletor, { token, origem, loja, zones, placeholder, limitarNaArea }) {
+  if (typeof MapboxGeocoder === "undefined" || !token) return null;
+  const opcoes = {
+    accessToken: token,
+    types: "address,postcode,poi",
+    countries: "br",
+    language: "pt-BR",
+    limit: 5,
+    marker: false,
+    flyTo: false,
+    placeholder
+  };
+  if (origem) opcoes.origin = origem;
+  // proximity ordena por perto da loja; bbox corta o que esta longe demais
+  if (loja && loja.lat != null) opcoes.proximity = { longitude: loja.lng, latitude: loja.lat };
+  if (limitarNaArea) {
+    const caixa = caixaDeBusca(loja, zones);
+    if (caixa) opcoes.bbox = caixa;
+  }
+  try {
+    const geocoder = new MapboxGeocoder(opcoes);
+    geocoder.addTo(seletor);
+    return geocoder;
+  } catch (erro) {
+    console.warn("busca da Mapbox indisponivel, usando o campo comum:", erro.message);
+    const caixa = document.querySelector(seletor);
+    if (caixa) caixa.innerHTML = "";
+    return null;
+  }
+}
+
 /* — endereco e taxa de entrega no carrinho — */
 let cotacaoEntrega = null;
 let buscaEnderecoTimer = null;
+let geocoderCliente = null;
+
+async function montarBuscaEndereco() {
+  if (geocoderCliente || !document.getElementById("endereco-widget")) return;
+  const { token, origem } = await statusEntrega();
+  const loja = getDelivery();
+  const geocoder = criarGeocoder("#endereco-widget", {
+    token, origem, loja, zones: loja.zones,
+    placeholder: "Ex: Rua Sacadura Cabral, 10 ou 20081-262",
+    limitarNaArea: true
+  });
+  if (!geocoder) return; // fica o campo comum, com a busca pelo servidor
+  geocoder.on("result", evento => {
+    const [lng, lat] = evento.result.center;
+    // guardamos o texto que a Mapbox devolveu: e o que o servidor vai
+    // reconhecer na hora de conferir a taxa de novo
+    document.getElementById("customer-place").value = evento.result.place_name;
+    cotarEndereco(evento.result.place_name, lng, lat);
+  });
+  geocoder.on("clear", () => {
+    document.getElementById("customer-place").value = "";
+    limparCotacao();
+  });
+  document.getElementById("customer-place").classList.add("campo-oculto");
+  geocoderCliente = geocoder;
+}
 
 function limparCotacao() {
   cotacaoEntrega = null;
@@ -592,12 +684,23 @@ function buscarEnderecoCliente(termo) {
     }
   }, 350);
 }
-async function escolherEndereco(endereco) {
+function escolherEndereco(endereco) {
   document.getElementById("customer-place").value = endereco;
   document.getElementById("endereco-sugestoes").innerHTML = "";
+  cotarEndereco(endereco);
+}
+/* Previa da taxa. Quando vem do widget ja temos a coordenada, entao poupamos
+ * uma segunda geocodificacao. O valor cobrado nao sai daqui: o servidor refaz
+ * a conta pelo endereco no momento de registrar o pedido. */
+async function cotarEndereco(endereco, lng, lat) {
   const aviso = document.getElementById("entrega-aviso");
+  const busca = new URLSearchParams({ q: endereco });
+  if (Number.isFinite(lng) && Number.isFinite(lat)) {
+    busca.set("lng", lng);
+    busca.set("lat", lat);
+  }
   try {
-    const dados = await (await fetch(`/api/entrega/taxa?q=${encodeURIComponent(endereco)}`)).json();
+    const dados = await (await fetch(`/api/entrega/taxa?${busca}`)).json();
     if (!dados.configurado) {
       cotacaoEntrega = null;
     } else if (dados.dentro) {
@@ -1545,17 +1648,26 @@ function saveDelivery(delivery) {
   data.delivery = delivery;
   saveDb(data);
 }
-let mapboxPronto = null;
 let buscaLojaTimer = null;
+let geocoderLoja = null;
 
-async function mapboxConfigurado() {
-  if (mapboxPronto !== null) return mapboxPronto;
-  try {
-    mapboxPronto = Boolean((await (await fetch("/api/entrega/status")).json()).configurado);
-  } catch {
-    mapboxPronto = false;
-  }
-  return mapboxPronto;
+async function montarBuscaLoja() {
+  if (!document.getElementById("loja-widget")) return;
+  const { token, origem } = await statusEntrega();
+  const loja = getDelivery();
+  // sem limitarNaArea: quem procura o endereco da loja pode estar corrigindo
+  // um ponto errado, entao a busca cobre o Brasil inteiro
+  const geocoder = criarGeocoder("#loja-widget", {
+    token, origem, loja,
+    placeholder: "Buscar o endereco da loja..."
+  });
+  if (!geocoder) return;
+  geocoder.on("result", evento => {
+    const [lng, lat] = evento.result.center;
+    definirLoja(lng, lat, evento.result.place_name);
+  });
+  document.getElementById("loja-busca")?.classList.add("campo-oculto");
+  geocoderLoja = geocoder;
 }
 function buscarLojaNoMapa(termo) {
   clearTimeout(buscaLojaTimer);
@@ -1578,8 +1690,10 @@ function buscarLojaNoMapa(termo) {
 }
 function definirLoja(lng, lat, endereco) {
   saveDelivery({ ...getDelivery(), lng, lat, endereco });
-  document.getElementById("loja-sugestoes").innerHTML = "";
-  document.getElementById("loja-busca").value = "";
+  const sugestoes = document.getElementById("loja-sugestoes");
+  const campo = document.getElementById("loja-busca");
+  if (sugestoes) sugestoes.innerHTML = "";
+  if (campo) campo.value = "";
   toast("Ponto da loja definido.");
 }
 function adicionarFaixa() {
@@ -1597,32 +1711,45 @@ function editarFaixa(indice, campo, valor) {
     i === indice ? { ...zone, [campo]: Number(String(valor).replace(",", ".")) || 0 } : zone);
   saveDelivery({ ...getDelivery(), zones });
 }
+/* renderAdmin roda de 6 em 6 segundos. Reescrever este painel a cada volta
+ * derrubaria o widget de busca e apagaria o que o atendente esta digitando,
+ * entao so redesenhamos quando a area de entrega realmente mudou. */
+let assinaturaEntrega = null;
+
 async function renderEntrega() {
   const alvo = document.getElementById("entrega-painel");
   if (!alvo) return;
-  const configurado = await mapboxConfigurado();
+  const { configurado } = await statusEntrega();
+  const loja = getDelivery();
+  const assinatura = JSON.stringify([configurado, loja]);
+  if (assinatura === assinaturaEntrega) return;
+  assinaturaEntrega = assinatura;
+  geocoderLoja = null;
+
   if (!configurado) {
     alvo.innerHTML = `
       <div class="setup-card">
         <h2>Mapbox ainda nao configurado</h2>
-        <p>A area de entrega precisa de um token da Mapbox para transformar endereco em coordenada.
-           O token fica no servidor e nunca aparece no navegador.</p>
+        <p>A area de entrega precisa de um token da Mapbox para transformar endereco em coordenada.</p>
         <ol>
-          <li>Crie a conta em <b>account.mapbox.com</b> e gere um token.</li>
+          <li>Crie a conta em <b>account.mapbox.com</b>.</li>
+          <li>Copie o <b>Default public token</b>, o que comeca com <code>pk.</code>.</li>
           <li>Guarde em <code>data/mapbox.txt</code> ou na variavel <code>MAPBOX_TOKEN</code>.</li>
           <li>Reinicie o <code>node server.js</code> e recarregue esta aba.</li>
         </ol>
+        <p class="faint">Nao coloque restricao por URL nesse token enquanto o servidor tambem o usa:
+           chamada de servidor nao manda referer e a Mapbox recusaria.</p>
         <p class="faint">Enquanto isso, a entrega segue funcionando com endereco digitado livremente, sem taxa automatica.</p>
       </div>`;
     return;
   }
-  const loja = getDelivery();
   const zones = [...(loja.zones || [])].sort((a, b) => a.km - b.km);
   alvo.innerHTML = `
     <div class="entrega-grid">
       <section class="panel">
         <h2>Ponto de partida</h2>
         <p class="faint">${loja.endereco ? escapeHtml(loja.endereco) : "Nenhum endereco definido ainda."}</p>
+        <div class="geocoder" id="loja-widget"></div>
         <input id="loja-busca" placeholder="Buscar o endereco da loja..." oninput="buscarLojaNoMapa(this.value)" autocomplete="off">
         <div class="sugestoes" id="loja-sugestoes"></div>
         ${loja.lng != null ? `<img class="mapa-loja" src="/api/entrega/mapa?v=${Date.now()}" alt="Mapa da loja">` : ""}
@@ -1645,6 +1772,7 @@ async function renderEntrega() {
         ${loja.lng == null && zones.length ? `<p class="form-error">Defina o ponto da loja para as faixas valerem.</p>` : ""}
       </section>
     </div>`;
+  montarBuscaLoja();
 }
 
 /* — estoque — */

@@ -616,7 +616,7 @@ body.cart-open .mobile-cart { opacity: 0; pointer-events: none; transform: trans
 .sugestao:hover { border-color: rgba(217,154,104,.45); background: var(--soft); }
 .sugestao strong { font-size: .85rem; }
 .sugestao span { color: var(--muted); font-size: .76rem; }
-.mapa-loja { width: 100%; height: auto; border-radius: var(--radius-md); border: 1px solid var(--line-soft); }
+.mapa-loja { width: 100%; aspect-ratio: 640 / 420; object-fit: cover; border-radius: var(--radius-md); border: 1px solid var(--line-soft); background: var(--soft); }
 .faixas { display: grid; gap: 8px; }
 .faixa-head, .faixa { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; align-items: center; }
 .faixa-head span { color: var(--muted); font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
@@ -624,6 +624,59 @@ body.cart-open .mobile-cart { opacity: 0; pointer-events: none; transform: trans
 .entrega-aviso { padding: 10px 14px; border-radius: var(--radius-sm); font-size: .82rem; font-weight: 600; line-height: 1.4; }
 .entrega-aviso.ok { background: var(--green-panel); color: var(--green); border: 1.5px solid rgba(143,174,109,.4); }
 .entrega-aviso.erro { background: var(--danger-bg); color: var(--danger); border: 1.5px solid rgba(212,127,110,.45); }
+
+/* — widget de busca da Mapbox —
+ * Ele chega branco e arredondado com a cara da Mapbox. Aqui ele veste a
+ * do Baixo K e passa a parecer um campo qualquer do formulario.
+ * O campo comum fica escondido por tras e continua guardando o endereco. */
+.campo-oculto { display: none; }
+.geocoder:empty { display: none; }
+.geocoder .mapboxgl-ctrl-geocoder {
+  width: 100%; max-width: none; min-width: 0; box-shadow: none; background: var(--soft);
+  border: 1.5px solid var(--line); border-radius: var(--radius-sm); font-family: var(--font-body);
+}
+.geocoder .mapboxgl-ctrl-geocoder:hover { border-color: rgba(255,255,255,.2); }
+.geocoder .mapboxgl-ctrl-geocoder:focus-within { border-color: var(--copper); }
+.geocoder .mapboxgl-ctrl-geocoder--input {
+  min-height: 44px; height: 44px; padding: 10px 40px; border: 0; border-radius: var(--radius-sm);
+  color: var(--ink); background: none; box-shadow: none; font-size: 1rem;
+}
+.geocoder .mapboxgl-ctrl-geocoder--input:focus { color: var(--ink); background: none; }
+.geocoder .mapboxgl-ctrl-geocoder--input::placeholder { color: var(--faint); }
+.geocoder .mapboxgl-ctrl-geocoder--icon { fill: var(--gold); top: 11px; }
+.geocoder .mapboxgl-ctrl-geocoder--icon-search { left: 11px; width: 20px; height: 20px; }
+/* ancorado na altura do campo (44px), e nao no meio do bloco: com a lista
+   aberta o bloco cresce e o "x" desceria junto */
+.geocoder .mapboxgl-ctrl-geocoder--pin-right > * { top: 22px; right: 10px; transform: translateY(-50%); margin: 0; }
+.geocoder .mapboxgl-ctrl-geocoder--button { background: none; }
+.geocoder .mapboxgl-ctrl-geocoder--icon-close { fill: var(--muted); }
+.geocoder .mapboxgl-ctrl-geocoder--button:hover .mapboxgl-ctrl-geocoder--icon-close { fill: var(--ink); }
+.geocoder .mapboxgl-ctrl-geocoder--icon-loading { fill: var(--muted); }
+/* O plugin so mostra o "x" para quem digitou; quem escolheu clicando numa
+   sugestao ficava sem como apagar o endereco. Aqui ele aparece sempre que o
+   campo tem texto, seja qual for o caminho. */
+.geocoder .mapboxgl-ctrl-geocoder:has(.mapboxgl-ctrl-geocoder--input:not(:placeholder-shown)) .mapboxgl-ctrl-geocoder--button {
+  display: block !important;
+}
+/* lista em fluxo, e nao flutuando: dentro do carrinho, que rola,
+   um menu absoluto seria cortado na borda de baixo */
+.geocoder .mapboxgl-ctrl-geocoder .suggestions {
+  position: static; margin-top: 6px; border-radius: var(--radius-sm); background: none;
+  box-shadow: none; display: grid; gap: 5px; font-size: .85rem;
+}
+.geocoder .mapboxgl-ctrl-geocoder .suggestions > li > a {
+  padding: 9px 13px; border-radius: var(--radius-sm); color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line-soft);
+}
+.geocoder .mapboxgl-ctrl-geocoder .suggestions > .active > a,
+.geocoder .mapboxgl-ctrl-geocoder .suggestions > li > a:hover {
+  background: var(--soft); border-color: rgba(217,154,104,.45);
+}
+.geocoder .mapboxgl-ctrl-geocoder--suggestion-title { color: var(--ink); font-weight: 700; }
+.geocoder .mapboxgl-ctrl-geocoder--suggestion-address { color: var(--muted); font-size: .76rem; }
+/* creditar a Mapbox e exigencia dos termos de uso: nao esconder */
+.geocoder .mapboxgl-ctrl-geocoder--powered-by { padding: 6px 13px; font-size: .68rem; color: var(--faint); }
+.geocoder .mapboxgl-ctrl-geocoder--powered-by a { color: var(--muted); }
 
 /* — promocoes e cupons no lado do cliente — */
 .product.on-sale .badge { background: var(--green); }

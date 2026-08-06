@@ -22,6 +22,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700;800&family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Busca de endereco oficial da Mapbox. Se a CDN nao carregar, o app cai
+       sozinho na busca pelo proprio servidor - ver montarBuscaEndereco() -->
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css">
+  <script defer src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body data-page="menu">
@@ -170,6 +174,7 @@
       </label>
       <label id="place-label" class="hidden">
         Local de entrega
+        <div class="geocoder" id="endereco-widget"></div>
         <input id="customer-place" placeholder="Rua e numero" autocomplete="off" oninput="buscarEnderecoCliente(this.value)">
       </label>
       <div class="sugestoes" id="endereco-sugestoes"></div>

@@ -67,6 +67,15 @@ function tokenMapbox() {
   if (process.env.MAPBOX_TOKEN) return process.env.MAPBOX_TOKEN.trim();
   try { return fs.readFileSync(MAPBOX_FILE, "utf8").trim(); } catch { return ""; }
 }
+/* O widget de busca da Mapbox roda no navegador e exige o token la.
+ * Token publico ("pk.") existe para isso e a propria Mapbox o trata como
+ * exposto - a protecao dele e a restricao por URL na conta.
+ * Token secreto ("sk.") nao sai daqui de jeito nenhum: nesse caso o navegador
+ * fica sem widget e volta para a busca via servidor, que continua funcionando. */
+function tokenPublico() {
+  const token = tokenMapbox();
+  return token.startsWith("pk.") ? token : "";
+}
 
 /* Distancia em linha reta, em km. E o que "raio de entrega" quer dizer:
  * nao mede trajeto, mede afastamento da loja. */
@@ -407,9 +416,19 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  /* Isto e uma previa mostrada no carrinho, nao o valor cobrado. Por isso pode
+   * partir da coordenada que o widget do navegador escolheu: se alguem forjar
+   * uma coordenada perto da loja, so engana a propria tela - na hora de fechar
+   * o pedido o servidor geocodifica o endereco de novo e refaz a conta. */
   if (pathname === "/api/entrega/taxa") {
-    const q = (url.parse(req.url, true).query.q || "").toString().trim();
+    const busca = url.parse(req.url, true).query;
+    const q = (busca.q || "").toString().trim();
+    const lng = Number(busca.lng);
+    const lat = Number(busca.lat);
     if (q.length < 3) return sendJson(res, 400, { erro: "endereco muito curto" });
+    if (Number.isFinite(lng) && Number.isFinite(lat)) {
+      return sendJson(res, 200, taxaParaEndereco(q, { lng, lat }));
+    }
     try {
       const achados = await geocodificar(q);
       if (!achados.length) return sendJson(res, 404, { erro: "endereco nao encontrado" });
@@ -439,7 +458,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (pathname === "/api/entrega/status") {
-    return sendJson(res, 200, { configurado: Boolean(tokenMapbox()) });
+    const loja = state.delivery || {};
+    return sendJson(res, 200, {
+      configurado: Boolean(tokenMapbox()),
+      // vazio quando o token e secreto: ai o navegador usa a busca via servidor
+      token: tokenPublico(),
+      origem: MAPBOX_API,
+      loja: loja.lng != null ? { lng: loja.lng, lat: loja.lat } : null
+    });
   }
 
   if (pathname === "/api/patch" && req.method === "POST") {

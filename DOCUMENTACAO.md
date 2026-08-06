@@ -125,6 +125,7 @@ Rotas:
 | `/api/entrega/buscar` | GET | Aberto | Busca endereco na Mapbox pelo servidor |
 | `/api/entrega/taxa` | GET | Aberto | Distancia e taxa de um endereco |
 | `/api/entrega/mapa` | GET | Aberto | Imagem do mapa da loja |
+| `/api/entrega/status` | GET | Aberto | Se ha token, o token publico e o ponto da loja |
 
 ### 3.5 Area de entrega com Mapbox
 
@@ -133,22 +134,45 @@ livre e quem lia o WhatsApp decidia se valia a pena.
 
 Agora o painel tem a aba **Area de entrega**: marca-se o ponto da loja pela busca de
 endereco e criam-se faixas de raio, cada uma com taxa e pedido minimo. No carrinho, o
-cliente digita o endereco, escolhe entre as sugestoes e ve na hora a distancia, a taxa
+cliente busca o endereco, escolhe entre as sugestoes e ve na hora a distancia, a taxa
 e o total — ou o aviso de que esta fora da area.
 
 Decisoes tomadas:
 
 - **Distancia em linha reta**, que e o que "raio" significa. Nao consome a API de
   rotas, entao o custo cai para so a geocodificacao.
-- **Token so no servidor.** A busca de endereco e a imagem do mapa passam pelo
-  `server.js`. O token nunca vai para o navegador.
 - **Nenhuma coordenada de cliente e gravada.** O plano gratuito da Mapbox e o de
   geocodificacao *temporaria*, que proibe armazenamento permanente. Guardamos o
   endereco em texto, a distancia e o valor — nunca latitude e longitude de quem pediu.
 - **A taxa e recalculada no servidor** no momento do pedido, geocodificando o endereco
-  de novo. Coordenada mandada pelo navegador e ignorada: seria so trocar por uma perto
-  da loja para pagar frete de graca.
+  de novo. Coordenada mandada pelo navegador nao entra na conta: seria so trocar por
+  uma perto da loja para pagar frete de graca.
 - **Sem token, tudo continua funcionando** como antes: endereco livre, sem taxa.
+
+#### A caixa de busca
+
+A busca e o widget oficial da Mapbox, o `mapbox-gl-geocoder`, com os parametros que
+importam para endereco brasileiro:
+
+| Parametro | Valor | Por que |
+|---|---|---|
+| `countries` | `br` | corta o resto do mundo |
+| `language` | `pt-BR` | resultado em portugues |
+| `types` | `address,postcode,poi` | aceita rua com numero, CEP e ponto de referencia |
+| `proximity` | ponto da loja | ordena o que esta perto primeiro |
+| `bbox` | caixa em volta da loja | "Rua Sacadura Cabral" existe em varias cidades |
+
+O `bbox` sai da maior faixa cadastrada vezes 1,6, entao acompanha sozinho quem
+aumenta a area de entrega. No painel ele nao e aplicado: quem procura o endereco da
+loja pode estar corrigindo um ponto errado.
+
+O widget roda no navegador e por isso precisa do token la. Token publico (`pk.`)
+existe para esse uso e a Mapbox o trata como exposto — quem protege ele e a restricao
+de dominio na conta. Token secreto (`sk.`) o servidor nunca entrega.
+
+Ha tres caminhos reserva, todos testados: token secreto, CDN da Mapbox bloqueada na
+rede da loja, e ausencia de token. Nos dois primeiros o campo comum reaparece e a
+busca volta a passar pelo `server.js`; no terceiro o endereco e livre, sem taxa.
 
 ### 3.6 Seguranca
 
@@ -226,12 +250,33 @@ de codigo.
 - **Modo sem servidor** (servidor estatico sem `/api`, simulando GitHub Pages):
   cardapio, carrinho, painel, mesas e telao funcionando, `sync.on: false`, zero erros.
 - **Persistencia**: servidor reiniciado, estado intacto.
+- **Widget da Mapbox no carrinho**: monta, some o campo antigo, busca, lista, escolha,
+  taxa no total (R$ 119,70 + R$ 5,00), botao de limpar zera a cotacao, voltar para
+  retirada nao deixa taxa presa.
+- **Widget no painel**: escolher no widget move o ponto da loja, e o redesenho de 6 em
+  6 segundos do painel nao apaga mais o que se esta digitando.
+- **Parametros que chegam na Mapbox**, conferidos na requisicao real:
+  `country=br`, `language=pt-BR`, `types=address,postcode,poi`, `proximity` na loja,
+  `bbox` de 19 km em volta (12 km da maior faixa x 1,6), `limit=5`.
+- **Os tres caminhos reserva**: token secreto, CDN bloqueada e sem token. Nos dois
+  primeiros a busca pelo servidor cotou os mesmos R$ 5,00; no terceiro o pedido
+  continuou possivel com endereco livre.
+- **Coordenada forjada**: `/api/entrega/taxa` com lat/lng colada na loja devolveu
+  R$ 5,00 para um endereco a 21,5 km — e o pedido com o mesmo endereco foi recusado
+  com *"endereco fora da area de entrega (21.5 km da loja)"*. A previa engana a tela,
+  nao a cobranca.
 
 ---
 
 ## 6. O que falta
 
 Em ordem de urgencia para a loja operar de verdade.
+
+0. **A Mapbox de verdade nunca respondeu.** Toda a area de entrega foi verificada
+   contra uma simulacao local que fala os dois dialetos da API (v6 no servidor, v5 no
+   widget), com enderecos e coordenadas reais do Rio. O formato foi escrito contra a
+   documentacao e conferido campo a campo, mas so um token real prova. Falta a conta
+   em `account.mapbox.com` — ela fica no nome do dono da loja.
 
 1. **Publicar.** Nada disso foi commitado nem publicado. O QR aponta para
    `nexo-dev-web.github.io/baixok/`, que ainda tem a versao antiga — **o QR fisico nao

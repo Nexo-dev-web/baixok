@@ -76,14 +76,29 @@ antes de imprimir os codigos.
 Opcional. Sem configurar, a entrega continua funcionando com endereco digitado
 livremente e sem taxa automatica — foi assim que o sistema sempre funcionou.
 
-1. Crie a conta em `account.mapbox.com` e gere um token.
-2. Guarde em `data/mapbox.txt` ou na variavel `MAPBOX_TOKEN`.
-3. Reinicie o servidor e abra a aba **Area de entrega** no painel.
-4. Busque o endereco da loja e crie as faixas de raio.
+1. Crie a conta em `account.mapbox.com`.
+2. Copie o **Default public token**, o que comeca com `pk.`.
+3. Guarde em `data/mapbox.txt` ou na variavel `MAPBOX_TOKEN`.
+4. Reinicie o servidor e abra a aba **Area de entrega** no painel.
+5. Busque o endereco da loja e crie as faixas de raio.
 
-O token fica **so no servidor**. A busca de endereco e o mapa passam pelo
-`server.js`, entao ele nunca aparece no navegador do cliente nem no codigo-fonte da
-pagina.
+### Sobre o token
+
+A caixa de busca e o widget oficial da Mapbox (`mapbox-gl-geocoder`), que roda no
+navegador e por isso precisa do token la. Token publico existe exatamente para esse
+uso: a propria Mapbox o trata como exposto, e quem protege ele e a restricao de
+dominio na conta, nao o sigilo.
+
+**Nao coloque restricao por URL** enquanto o `server.js` usar o mesmo token. Chamada
+de servidor nao manda `Referer`, e a Mapbox recusaria. Se quiser restringir, gere
+dois tokens: um publico restrito ao seu dominio, e um secreto so para o servidor.
+
+Token secreto (`sk.`) nunca e entregue ao navegador. Nesse caso o widget nao aparece
+e a busca volta a passar pelo `server.js` — o mesmo acontece se a CDN da Mapbox
+estiver bloqueada na rede da loja. Sem token nenhum, a entrega funciona com endereco
+digitado livremente e sem taxa automatica, como sempre funcionou.
+
+O mapa da aba do painel continua passando pelo servidor em qualquer caso.
 
 A distancia e medida **em linha reta** a partir da loja, que e o que "raio de entrega"
 significa. O cliente paga a taxa da primeira faixa que alcanca; endereco alem da
@@ -95,6 +110,11 @@ desse porte nao chega perto disso.
 **Nao guardamos coordenada de cliente.** O plano gratuito e o de geocodificacao
 temporaria, que proibe armazenamento permanente dos resultados. O sistema calcula a
 taxa na hora e grava so o endereco em texto, a distancia e o valor.
+
+**A taxa mostrada no carrinho e uma previa.** Ela pode partir da coordenada que o
+widget escolheu no navegador. O valor cobrado nao: ao registrar o pedido o servidor
+geocodifica o endereco de novo, refaz a distancia e recusa o que estiver fora da
+area. Trocar a coordenada no navegador so engana a propria tela.
 
 ## Impressora Elgin i8
 
