@@ -1,0 +1,38 @@
+/* Autenticacao e autorizacao por papel.
+ *
+ * Toda rota do painel declara explicitamente quem pode chamar. O sistema antigo
+ * tinha um unico portao (`if (!balcao) return 401`) e, passado ele, quem estava
+ * na cozinha podia apagar o cardapio inteiro pela mesma API. */
+import { env } from "../config/env.js";
+import { authService } from "../services/auth.service.js";
+import { naoAutenticado, semPermissao } from "../lib/errors.js";
+
+/* Popula req.sessao quando ha cookie valido, e segue adiante de qualquer jeito.
+ * Roda em tudo, inclusive nas rotas publicas. */
+export function carregarSessao(req, _res, next) {
+  const token = req.cookies?.[env.SESSION_COOKIE_NAME];
+  req.sessao = authService.resolverSessao(token);
+  req.usuario = req.sessao?.usuario || null;
+  req.tokenSessao = token || null;
+  next();
+}
+
+export function exigirLogin(req, _res, next) {
+  if (!req.usuario) return next(naoAutenticado());
+  next();
+}
+
+/* exigirPapel("admin") ou exigirPapel("admin", "caixa").
+ *
+ * Sem hierarquia implicita de proposito: "cozinha" nao e um "caixa com menos
+ * poder", e um perfil diferente. Cada rota lista quem aceita, e a lista fica
+ * legivel no proprio arquivo de rotas. */
+export function exigirPapel(...papeisAceitos) {
+  return (req, _res, next) => {
+    if (!req.usuario) return next(naoAutenticado());
+    if (!papeisAceitos.includes(req.usuario.papel)) {
+      return next(semPermissao(`Esta acao e restrita a: ${papeisAceitos.join(", ")}.`));
+    }
+    next();
+  };
+}

@@ -1,0 +1,17 @@
+/* Estilos do painel interno. */
+@import "./base/tokens.css";
+@import "./base/reset.css";
+@import "./base/motion.css";
+
+@import "./components/buttons.css";
+@import "./components/topbar.css";
+@import "./components/utilitarios.css";
+@import "./components/toast.css";
+@import "./components/formularios.css";
+@import "./components/modais.css";
+@import "./components/endereco.css";
+@import "./components/novos.css";
+
+@import "./pages/admin.css";
+
+@import "./base/responsivo.css";

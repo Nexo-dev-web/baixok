@@ -1,0 +1,88 @@
+/* Primeira carga: administrador, mesas, cardapio de exemplo e ajustes.
+ *
+ * Idempotente — rodar de novo nao duplica nada, so completa o que falta. */
+import { randomBytes } from "node:crypto";
+import { env } from "../config/env.js";
+import { abrirBanco, emTransacao } from "./connection.js";
+import { migrar } from "./migrate.js";
+import { usuariosRepo } from "../repositories/usuarios.repo.js";
+import { produtosRepo } from "../repositories/produtos.repo.js";
+import { mesasRepo } from "../repositories/mesas.repo.js";
+import { ajustesRepo } from "../repositories/ajustes.repo.js";
+import { gerarHashSenha } from "../lib/password.js";
+
+const PRODUTOS_EXEMPLO = [
+  { id: "pizza-calabresa", name: "Pizza Calabresa", category: "pizzas", price: 39.9, stock: 18, minStock: 4, badge: "Pizza", description: "Mussarela, calabresa, cebola e oregano." },
+  { id: "pizza-frango", name: "Pizza Frango Catupiry", category: "pizzas", price: 44.9, stock: 14, minStock: 4, badge: "Pizza", description: "Frango temperado, catupiry e mussarela." },
+  { id: "pizza-baixo-k", name: "Pizza Baixo K", category: "pizzas", price: 49.9, stock: 10, minStock: 3, badge: "Mais pedida", description: "Massa da casa, mix de queijos, bacon e finalizacao especial." },
+  { id: "burguer-classico", name: "Burguer Classico", category: "burgues", price: 22.9, stock: 30, minStock: 6, badge: "Burguer", description: "Pao brioche, carne, queijo, salada e molho da casa." },
+  { id: "burguer-bacon", name: "Burguer Bacon", category: "burgues", price: 27.9, stock: 24, minStock: 6, badge: "Bacon", description: "Carne, cheddar, bacon crocante e cebola caramelizada." },
+  { id: "burguer-duplo", name: "Burguer Duplo K", category: "burgues", price: 34.9, stock: 16, minStock: 4, badge: "Duplo", description: "Duas carnes, queijo duplo, bacon e molho especial." },
+  { id: "massa-bolonhesa", name: "Massa Bolonhesa", category: "massas", price: 31.9, stock: 12, minStock: 3, badge: "Massa", description: "Massa ao molho bolonhesa com parmesao." },
+  { id: "massa-alfredo", name: "Massa Alfredo", category: "massas", price: 33.9, stock: 12, minStock: 3, badge: "Cremosa", description: "Molho branco cremoso, frango e toque de ervas." },
+  { id: "batata-k", name: "Batata Baixo K", category: "porcoes", price: 24.9, stock: 20, minStock: 5, badge: "Porcao", description: "Batata frita com cheddar, bacon e molho da casa." },
+  { id: "refri-lata", name: "Refrigerante Lata", category: "drinks", price: 7.9, stock: 48, minStock: 12, badge: "Gelado", description: "Lata 350ml gelada." },
+  { id: "refri-2l", name: "Refrigerante 2L", category: "drinks", price: 14.9, stock: 18, minStock: 6, badge: "2 litros", description: "Garrafa 2L gelada." },
+  { id: "drink-limao", name: "Drink Limao", category: "drinks", price: 16.9, stock: 22, minStock: 5, badge: "Drink", description: "Drink refrescante de limao para acompanhar o pedido." },
+  { id: "drink-maracuja", name: "Drink Maracuja", category: "drinks", price: 18.9, stock: 18, minStock: 5, badge: "Assinatura", description: "Maracuja, gelo e finalizacao da casa." }
+];
+
+const MESAS_INICIAIS = 8;
+
+export async function semear({ silencioso = false } = {}) {
+  abrirBanco();
+  migrar();
+
+  const avisar = (...args) => { if (!silencioso) console.log(...args); };
+  const resultado = { admin: null, senhaGerada: null, produtos: 0, mesas: 0 };
+
+  /* Administrador. A senha vem do ambiente ou e sorteada — nunca ha senha
+   * padrao cravada no codigo, que e como instalacoes ficam abertas por anos. */
+  if (usuariosRepo.contarAdminsAtivos() === 0) {
+    const senha = env.ADMIN_BOOTSTRAP_PASSWORD || randomBytes(12).toString("base64url");
+    const usuario = usuariosRepo.criar({
+      usuario: env.ADMIN_BOOTSTRAP_USER,
+      nome: "Administrador",
+      senhaHash: await gerarHashSenha(senha),
+      papel: "admin"
+    });
+    resultado.admin = usuario.usuario;
+    if (!env.ADMIN_BOOTSTRAP_PASSWORD) resultado.senhaGerada = senha;
+
+    avisar("\n=================================================");
+    avisar("  ADMINISTRADOR CRIADO");
+    avisar(`  usuario: ${usuario.usuario}`);
+    avisar(`  senha:   ${senha}`);
+    avisar("  Anote agora e troque no primeiro acesso.");
+    avisar("=================================================\n");
+  } else {
+    avisar("Ja existe administrador. Nenhum usuario criado.");
+  }
+
+  emTransacao(() => {
+    if (!produtosRepo.listar().length) {
+      for (const produto of PRODUTOS_EXEMPLO) {
+        produtosRepo.criar({ ...produto, active: true, image: "" });
+        resultado.produtos += 1;
+      }
+    }
+    if (!mesasRepo.listar().length) {
+      for (let n = 1; n <= MESAS_INICIAIS; n += 1) {
+        mesasRepo.criar(n);
+        resultado.mesas += 1;
+      }
+    }
+    ajustesRepo.gravarVarios({ nome_loja: "Baixo K", taxa_servico_mesa: "0.1" });
+  });
+
+  if (resultado.produtos) avisar(`Cardapio de exemplo: ${resultado.produtos} produtos.`);
+  if (resultado.mesas) avisar(`Mesas criadas: ${resultado.mesas}.`);
+  return resultado;
+}
+
+if (process.argv[1]?.endsWith("seed.js")) {
+  semear().then(() => process.exit(0)).catch(erro => {
+    console.error("Falha no seed:", erro.message);
+    process.exit(1);
+  });
+}

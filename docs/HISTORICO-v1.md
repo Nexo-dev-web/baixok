@@ -1,7 +1,18 @@
-# Baixo K — documentacao do sistema
+# Baixo K — documentacao da versao 1 (arquitetura anterior)
 
-Estado do projeto e registro do que foi construido. Para instrucoes de execucao,
-veja o [README](README.md).
+> **Documento historico.** Descreve a arquitetura de arquivo unico que existia
+> antes da reestruturacao: `app.js`, `styles.css` e `server.js` na raiz, com
+> estado em `data/baixo-k.json` e senha unica da loja.
+>
+> Continua aqui porque registra bem **as regras de negocio e o porque de varias
+> decisoes de produto**, que foram preservadas. Para a arquitetura atual, veja
+> [ARQUITETURA.md](ARQUITETURA.md); para o que mudou em seguranca,
+> [SEGURANCA.md](SEGURANCA.md); para instrucoes de execucao, o
+> [README](../README.md).
+>
+> Os nomes de arquivo e caminhos citados abaixo **nao existem mais**.
+
+Estado do projeto e registro do que foi construido.
 
 Ultima atualizacao: 06/08/2026.
 

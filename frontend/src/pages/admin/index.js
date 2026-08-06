@@ -1,0 +1,212 @@
+/* Painel interno.
+ *
+ * O que este arquivo faz de diferente do app.js antigo:
+ *
+ * - Nao ha modo offline. Sem servidor, o painel avisa e para; nao cai para um
+ *   banco local que funcionava sem senha nenhuma.
+ * - As abas visiveis dependem do papel de quem entrou.
+ * - Cada area se redesenha sozinha quando o servidor avisa que ela mudou, em
+ *   vez de tudo recarregar a cada evento. */
+import "../../styles/admin.css";
+import { $, $$, delegar, mostrar, ligarModal } from "../../utils/dom.js";
+import { toast, toastFalha } from "../../components/toast.js";
+import { apiAuth } from "../../services/api.js";
+import { definirTratamentoDeSessao } from "../../services/http.js";
+import { conectarEventos } from "../../services/realtime.js";
+import { fecharQrMesa } from "../../components/qr-mesa.js";
+import { estado, carregar, marcarConexao } from "./store.js";
+import { ABAS, abasDoPapel, abaInicial, podeVer } from "./abas.js";
+import { ligarVendaManual } from "./venda-manual.js";
+
+import { desenharPedidos, ligarPedidos } from "./tabs/pedidos.js";
+import { desenharCozinha, ligarCozinha } from "./tabs/cozinha.js";
+import { desenharMesas, ligarMesas } from "./tabs/mesas.js";
+import { desenharProdutos, ligarProdutos } from "./tabs/produtos.js";
+import { desenharPromocoes, desenharCupons, ligarPromocoes } from "./tabs/promocoes.js";
+import { desenharEntrega, ligarEntrega, recarregarRascunhoEntrega } from "./tabs/entrega.js";
+import { desenharEstoque, ligarEstoque } from "./tabs/estoque.js";
+import { desenharDashboard, ligarDashboard } from "./tabs/dashboard.js";
+import { desenharEquipe, ligarEquipe } from "./tabs/equipe.js";
+
+let abaAtual = null;
+
+/* Qual funcao redesenha cada aba, e o que ela precisa recarregar. */
+const DESENHO = {
+  pedidos: desenharPedidos,
+  cozinha: desenharCozinha,
+  mesas: desenharMesas,
+  produtos: desenharProdutos,
+  promos: () => { desenharPromocoes(); desenharCupons(); },
+  entrega: desenharEntrega,
+  estoque: desenharEstoque,
+  dashboard: desenharDashboard,
+  equipe: desenharEquipe
+};
+
+/* Que abas cada assunto do SSE afeta. Sem este mapa voltariamos ao
+ * comportamento antigo: qualquer alteracao redesenhava o sistema inteiro. */
+const AFETADAS = {
+  pedidos: ["pedidos", "cozinha", "mesas", "dashboard"],
+  produtos: ["produtos", "estoque", "promos", "dashboard"],
+  promocoes: ["promos", "produtos"],
+  cupons: ["promos"],
+  mesas: ["mesas"],
+  entrega: ["entrega"],
+  retomada: ["pedidos", "cozinha", "mesas"]
+};
+
+// ------------------------------------------------------------------- sessao ---
+definirTratamentoDeSessao(() => {
+  location.replace("/entrar.html?de=%2Fadmin.html");
+});
+
+// --------------------------------------------------------------------- abas ---
+function montarMenu(papel) {
+  const nav = $("#nav-list");
+  const permitidas = abasDoPapel(papel);
+
+  for (const botao of $$("[data-tab]", nav)) {
+    mostrar(botao, permitidas.some(([chave]) => chave === botao.dataset.tab));
+  }
+}
+
+async function abrirAba(chave) {
+  const papel = estado.usuario?.papel;
+  if (!podeVer(chave, papel)) return;
+
+  abaAtual = chave;
+  for (const secao of $$(".admin-tab")) mostrar(secao, secao.id === `tab-${chave}`);
+  for (const botao of $$("[data-tab]")) botao.classList.toggle("active", botao.dataset.tab === chave);
+
+  $("#page-title").textContent = ABAS[chave].titulo;
+  $("#page-sub").textContent = ABAS[chave].subtitulo;
+
+  /* Guarda a aba na URL: recarregar a pagina (ou o F5 do tablet) volta para
+   * onde a pessoa estava, em vez de sempre cair na fila. */
+  history.replaceState(null, "", `#${chave}`);
+
+  await DESENHO[chave]?.();
+}
+
+// ------------------------------------------------------------------ metricas ---
+function desenharMetricas() {
+  const alvo = $("#mini-metrics");
+  if (!alvo) return;
+
+  const { porStatus = {} } = estado.resumo;
+  alvo.replaceChildren();
+
+  const cartoes = [
+    ["Novos", porStatus.novo || 0, (porStatus.novo || 0) > 0 ? "alert-copper" : ""],
+    ["Em preparo", porStatus.preparo || 0, ""],
+    ["Prontos", porStatus.pronto || 0, ""]
+  ];
+
+  for (const [rotulo, valor, tom] of cartoes) {
+    const cartao = document.createElement("div");
+    cartao.className = `mini-metric ${tom}`;
+    const nome = document.createElement("span");
+    nome.textContent = rotulo;
+    const numero = document.createElement("strong");
+    numero.textContent = String(valor);
+    cartao.append(nome, numero);
+    alvo.append(cartao);
+  }
+}
+
+// ------------------------------------------------------------------- ligacao ---
+function ligarShell() {
+  delegar($("#nav-list"), "click", "[data-tab]", (_e, botao) => abrirAba(botao.dataset.tab));
+
+  $("#sair")?.addEventListener("click", async () => {
+    try { await apiAuth.sair(); } catch { /* segue para o login de qualquer forma */ }
+    location.replace("/entrar.html");
+  });
+
+  $("#trocar-senha")?.addEventListener("click", async () => {
+    const atual = prompt("Sua senha atual:");
+    if (!atual) return;
+    const nova = prompt("Nova senha (minimo 10 caracteres):");
+    if (!nova) return;
+    try {
+      await apiAuth.trocarSenha({ senhaAtual: atual, senhaNova: nova });
+      toast("Senha trocada. As outras sessoes suas foram encerradas.");
+    } catch (erro) {
+      toastFalha(erro);
+    }
+  });
+
+  const suporte = $("#support-modal");
+  $("#abrir-suporte")?.addEventListener("click", () => mostrar(suporte, true));
+  $("#fechar-suporte")?.addEventListener("click", () => mostrar(suporte, false));
+  ligarModal(suporte, () => mostrar(suporte, false));
+
+  const qr = $("#qr-modal");
+  $("#qr-close")?.addEventListener("click", fecharQrMesa);
+  ligarModal(qr, fecharQrMesa);
+
+  ligarPedidos();
+  ligarCozinha();
+  ligarMesas();
+  ligarProdutos();
+  ligarPromocoes();
+  ligarEntrega();
+  ligarEstoque();
+  ligarDashboard();
+  ligarEquipe();
+  ligarVendaManual();
+}
+
+// -------------------------------------------------------------------- inicio ---
+async function iniciar() {
+  let sessao;
+  try {
+    sessao = await apiAuth.eu();
+  } catch {
+    marcarConexao(false);
+    toastFalha({ codigo: "offline" }, "Servidor");
+    return;
+  }
+
+  if (!sessao.autenticado) {
+    location.replace("/entrar.html?de=%2Fadmin.html");
+    return;
+  }
+
+  estado.usuario = sessao.usuario;
+  $("#usuario-nome").textContent = sessao.usuario.nome;
+  $("#usuario-papel").textContent = { admin: "Administrador", caixa: "Caixa", cozinha: "Cozinha" }[sessao.usuario.papel];
+
+  montarMenu(sessao.usuario.papel);
+  ligarShell();
+
+  await carregar();
+  desenharMetricas();
+
+  /* Aba da URL, se o papel permitir; senao a inicial daquele papel. */
+  const daUrl = location.hash.slice(1);
+  await abrirAba(podeVer(daUrl, sessao.usuario.papel) ? daUrl : abaInicial(sessao.usuario.papel));
+
+  conectarEventos({
+    canal: "operacao",
+    aoMudar: async assunto => {
+      const areas = { pedidos: ["pedidos"], produtos: ["produtos"], promocoes: ["promocoes"], cupons: ["cupons"], mesas: ["mesas"], entrega: ["entrega"] }[assunto];
+      await carregar(...(areas || []));
+      if (assunto === "entrega") recarregarRascunhoEntrega();
+      desenharMetricas();
+
+      const afetadas = AFETADAS[assunto] || Object.keys(DESENHO);
+      if (afetadas.includes(abaAtual)) await DESENHO[abaAtual]?.();
+    },
+    aoStatus: online => marcarConexao(online === "conectado")
+  });
+
+  /* O tempo de espera nos cartoes envelhece sozinho, sem evento nenhum do
+   * servidor: um pedido parado ha 20 minutos precisa mudar de cor. */
+  setInterval(() => {
+    if (abaAtual === "pedidos") desenharPedidos();
+    if (abaAtual === "cozinha") desenharCozinha();
+  }, 30000);
+}
+
+iniciar();

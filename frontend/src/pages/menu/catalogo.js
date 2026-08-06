@@ -1,0 +1,108 @@
+/* Vitrine do cardapio: destaques, filtros e grade de produtos. */
+import { el, render, $ } from "../../utils/dom.js";
+import { reais } from "../../utils/formato.js";
+import { CATEGORIAS_ROTULO } from "../../utils/categorias.js";
+
+const CATEGORIAS_FILTRO = { todos: "Todos", ...CATEGORIAS_ROTULO };
+
+/* Sem foto cadastrada mostramos um espaco marcado, nao uma imagem quebrada. */
+function foto(produto, alt = "") {
+  if (!produto?.image) {
+    return el("div.no-photo", {}, "Sem foto", el("br"), el("small", {}, "Cadastre no painel"));
+  }
+  return el("img", {
+    src: produto.image,
+    alt: alt || produto.name || "",
+    loading: "lazy",
+    decoding: "async",
+    onerror: evento => evento.target.replaceWith(
+      el("div.no-photo", {}, "Sem foto", el("br"), el("small", {}, "Cadastre no painel"))
+    )
+  });
+}
+
+function cartaoProduto(produto) {
+  const promocional = produto.emPromocao && produto.precoOriginal > produto.price;
+
+  return el("article.product", { class: promocional ? "on-sale" : "", dataset: { id: produto.id } },
+    el("span.badge", {}, promocional ? "Promocao" : (produto.badge || CATEGORIAS_ROTULO[produto.category] || "Item")),
+    foto(produto),
+    el("div.product-body", {},
+      el("strong", {}, produto.name),
+      el("p", {}, produto.description || ""),
+      el("div.price-row", {},
+        el("span", {},
+          promocional ? el("s", {}, reais(produto.precoOriginal)) : null,
+          promocional ? " " : null,
+          reais(produto.price)
+        ),
+        /* data-acao em vez de onclick: e o que permite a CSP sem
+         * 'unsafe-inline' e evita registrar um ouvinte por card a cada
+         * redesenho da lista. */
+        el("button.primary", { type: "button", dataset: { acao: "adicionar", id: produto.id } }, "Adicionar")
+      )
+    )
+  );
+}
+
+/* Escolhe tres destaques: o item de assinatura, depois um de cada categoria. */
+function destaques(produtos) {
+  const escolhidos = [];
+  const juntar = produto => {
+    if (produto && !escolhidos.some(item => item.id === produto.id)) escolhidos.push(produto);
+  };
+
+  juntar(produtos.find(produto => /baixo k|mais pedida|especial/i.test(`${produto.name} ${produto.badge || ""}`)));
+  for (const categoria of ["burgues", "drinks", "pizzas", "massas"]) {
+    juntar(produtos.find(produto => produto.category === categoria));
+  }
+  produtos.forEach(juntar);
+  return escolhidos.slice(0, 3);
+}
+
+export function desenharDestaques(produtos) {
+  const alvo = $("#signature");
+  if (!alvo) return;
+
+  render(alvo, ...destaques(produtos).map(produto =>
+    el("article", { dataset: { acao: "categoria", categoria: produto.category }, role: "button", tabIndex: 0 },
+      foto(produto),
+      el("div", {},
+        el("span", {}, produto.badge || CATEGORIAS_ROTULO[produto.category] || "Destaque"),
+        el("strong", {}, produto.name),
+        el("em", {}, reais(produto.price))
+      )
+    )
+  ));
+}
+
+export function desenharFiltros(categoriaAtual) {
+  const alvo = $("#filters");
+  if (!alvo) return;
+
+  render(alvo, ...Object.entries(CATEGORIAS_FILTRO).map(([chave, rotulo]) =>
+    el("button.filter", {
+      type: "button",
+      class: categoriaAtual === chave ? "active" : "",
+      dataset: { acao: "categoria", categoria: chave },
+      "aria-pressed": String(categoriaAtual === chave)
+    }, rotulo)
+  ));
+}
+
+export function desenharGrade(produtos, { categoria, busca }) {
+  const alvo = $("#menu");
+  if (!alvo) return;
+
+  const termo = (busca || "").trim().toLowerCase();
+  const lista = produtos.filter(produto => {
+    const categoriaOk = categoria === "todos" || produto.category === categoria;
+    const buscaOk = !termo ||
+      `${produto.name} ${produto.description || ""} ${produto.badge || ""}`.toLowerCase().includes(termo);
+    return categoriaOk && buscaOk;
+  });
+
+  render(alvo, lista.length
+    ? lista.map(cartaoProduto)
+    : el("p.faint", {}, "Nenhum item disponivel nesse filtro."));
+}

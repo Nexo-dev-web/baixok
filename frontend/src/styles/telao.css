@@ -1,0 +1,12 @@
+/* Estilos do telao do salao. */
+@import "./base/tokens.css";
+@import "./base/reset.css";
+@import "./base/motion.css";
+
+@import "./components/topbar.css";
+@import "./components/utilitarios.css";
+@import "./components/novos.css";
+
+@import "./pages/telao.css";
+
+@import "./base/responsivo.css";

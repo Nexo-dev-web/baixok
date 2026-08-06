@@ -1,0 +1,53 @@
+﻿/* Modais: venda manual, QR da mesa e suporte. */
+
+/* â€” modais (venda manual + QR) â€” */
+.modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 24px; background: rgba(10,8,6,.8); }
+.modal.hidden { display: none; }
+.modal-card {
+  display: grid; gap: 12px; width: 560px; max-width: 100%; max-height: 84vh; overflow-y: auto;
+  padding: 24px 26px; border-radius: var(--radius-lg); background: var(--panel);
+  border: 1.5px solid rgba(217,154,104,.4); box-shadow: var(--shadow-lg);
+}
+.modal-card h2 { font-size: 1.2rem; }
+.modal-card > div > p { margin-top: 3px; color: var(--muted); font-size: .76rem; line-height: 1.45; }
+.modal-hint { color: var(--faint); font-size: .7rem; line-height: 1.45; }
+.chip-row { display: flex; gap: 7px; flex-wrap: wrap; }
+.chip { padding: 8px 15px; border-radius: var(--radius-pill); border: 1.5px solid var(--line); background: var(--sidebar); color: var(--muted-2); font-size: .76rem; font-weight: 700; }
+.chip:hover { border-color: rgba(217,154,104,.4); }
+.chip.active { border-color: var(--copper); background: var(--copper); color: var(--on-accent); }
+.modal-card input, .modal-card select { background: var(--sidebar); }
+.manual-product-list { display: grid; gap: 6px; max-height: 170px; overflow-y: auto; }
+.manual-product { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 12px; background: var(--sidebar); }
+.manual-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .78rem; font-weight: 600; }
+.manual-price { color: var(--gold); font-size: .76rem; font-weight: 700; }
+.round-add { display: grid; place-items: center; width: 26px; height: 26px; border-radius: var(--radius-pill); background: var(--copper); color: var(--on-accent); font-size: .95rem; font-weight: 800; }
+.round-add:hover { background: var(--copper-hover); }
+.manual-cart { display: grid; gap: 6px; padding-top: 11px; border-top: 1px solid var(--line-soft); }
+.manual-cart:empty { display: none; }
+.manual-cart-row { display: flex; align-items: center; gap: 10px; font-size: .78rem; }
+.manual-cart-row > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.manual-cart-row button { color: var(--gold); font-size: .95rem; font-weight: 800; padding: 0 4px; }
+.manual-cart-total { display: flex; justify-content: space-between; padding-top: 9px; border-top: 1px solid var(--line-soft); color: var(--gold-light); font-weight: 800; font-size: .9rem; }
+.qr-card { width: 360px; justify-items: center; text-align: center; }
+.qr-logo { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; }
+.qr-frame { padding: 14px; border-radius: var(--radius-md); background: #fff; }
+.qr-frame img { display: block; width: 220px; height: 220px; }
+.qr-url { color: var(--muted); font-size: .7rem; word-break: break-all; }
+
+.print-frame { position: fixed; right: 0; bottom: 0; width: 0; height: 0; border: 0; visibility: hidden; }
+.dashboard-order-line span, .dashboard-order-line em { display: block; margin-top: 4px; color: var(--muted); font-style: normal; font-size: .82rem; }
+
+/* â€” support modal â€” */
+.support-modal { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 18px; background: rgba(8,6,4,.7); }
+.support-modal.hidden { display: none; }
+.support-panel { width: min(920px, 100%); max-height: 88vh; overflow: auto; padding: 22px; border-radius: var(--radius-lg); background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow-lg); }
+.support-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.support-panel h2, .support-panel h3 { color: var(--gold); }
+.support-hero { display: flex; gap: 14px; align-items: center; margin: 14px 0; padding: 14px; border-radius: var(--radius-md); background: var(--soft); }
+.support-hero img { width: 110px; height: 74px; padding: 10px; object-fit: contain; border-radius: var(--radius-sm); background: #fff; }
+.support-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.support-card { display: grid; gap: 8px; padding: 16px; border-radius: var(--radius-sm); background: var(--shell); border: 1px solid var(--line-soft); }
+.support-card span { color: var(--muted); font-size: .84rem; }
+.support-card strong { color: var(--gold); font-size: 1.05rem; }
+
+
