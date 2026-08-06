@@ -35,8 +35,8 @@ export const authController = {
     res.json({ usuario: resultado.usuario });
   },
 
-  logout(req, res) {
-    authService.logout({ token: req.tokenSessao, usuarioAtual: req.usuario, ip: ipDe(req) });
+  async logout(req, res) {
+    await authService.logout({ token: req.tokenSessao, usuarioAtual: req.usuario, ip: ipDe(req) });
     limparCookies(res);
     res.json({ ok: true });
   },

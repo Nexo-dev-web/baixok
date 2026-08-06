@@ -1,4 +1,9 @@
-/* Controllers do painel. Todos exigem sessao; o papel e checado na rota. */
+/* Controllers do painel. Todos exigem sessao; o papel e checado na rota.
+ *
+ * Todo handler que toca o banco e async: com o Postgres as consultas voltaram
+ * assincronas, e um handler sincrono responderia com Promise no lugar do dado.
+ * O Express 5 encaminha a rejeicao de um handler async para o tratarErro
+ * sozinho, entao nao ha try/catch repetido aqui. */
 import { pedidosService } from "../services/pedidos.service.js";
 import { produtosService, promocoesService } from "../services/produtos.service.js";
 import { mesasService } from "../services/mesas.service.js";
@@ -11,118 +16,122 @@ import { mapaEstatico } from "../lib/mapbox.js";
 import { contexto } from "./contexto.js";
 
 export const pedidosController = {
-  listar(req, res) {
-    res.json({ pedidos: pedidosService.listar(req.validado.query) });
+  async listar(req, res) {
+    res.json({ pedidos: await pedidosService.listar(req.validado.query) });
   },
-  abertos(_req, res) {
-    res.json({ pedidos: pedidosService.listarAbertos(), resumo: pedidosService.resumoDoDia() });
+  async abertos(_req, res) {
+    const [pedidos, resumo] = await Promise.all([
+      pedidosService.listarAbertos(),
+      pedidosService.resumoDoDia()
+    ]);
+    res.json({ pedidos, resumo });
   },
-  buscar(req, res) {
-    res.json({ pedido: pedidosService.buscar(req.validado.params.id) });
+  async buscar(req, res) {
+    res.json({ pedido: await pedidosService.buscar(req.validado.params.id) });
   },
-  criarManual(req, res) {
-    res.status(201).json({ pedido: pedidosService.criarManual(req.validado.body, contexto(req)) });
+  async criarManual(req, res) {
+    res.status(201).json({ pedido: await pedidosService.criarManual(req.validado.body, contexto(req)) });
   },
-  mudarStatus(req, res) {
+  async mudarStatus(req, res) {
     const { id } = req.validado.params;
-    res.json({ pedido: pedidosService.mudarStatus(id, req.validado.body.status, contexto(req)) });
+    res.json({ pedido: await pedidosService.mudarStatus(id, req.validado.body.status, contexto(req)) });
   },
-  cancelar(req, res) {
+  async cancelar(req, res) {
     const { id } = req.validado.params;
-    res.json({ pedido: pedidosService.cancelar(id, req.validado.body.motivo, contexto(req)) });
+    res.json({ pedido: await pedidosService.cancelar(id, req.validado.body.motivo, contexto(req)) });
   },
-  marcarImpresso(req, res) {
-    pedidosService.marcarImpresso(req.validado.params.id);
+  async marcarImpresso(req, res) {
+    await pedidosService.marcarImpresso(req.validado.params.id);
     res.json({ ok: true });
   }
 };
 
 export const produtosController = {
-  listar(_req, res) {
-    res.json({ produtos: produtosService.listar() });
+  async listar(_req, res) {
+    res.json({ produtos: await produtosService.listar() });
   },
-  criar(req, res) {
-    res.status(201).json({ produto: produtosService.criar(req.validado.body, contexto(req)) });
+  async criar(req, res) {
+    res.status(201).json({ produto: await produtosService.criar(req.validado.body, contexto(req)) });
   },
-  atualizar(req, res) {
-    res.json({ produto: produtosService.atualizar(req.validado.params.id, req.validado.body, contexto(req)) });
+  async atualizar(req, res) {
+    res.json({ produto: await produtosService.atualizar(req.validado.params.id, req.validado.body, contexto(req)) });
   },
-  remover(req, res) {
-    produtosService.remover(req.validado.params.id, contexto(req));
+  async remover(req, res) {
+    await produtosService.remover(req.validado.params.id, contexto(req));
     res.json({ ok: true });
   },
-  alternarAtivo(req, res) {
-    res.json({ produto: produtosService.alternarAtivo(req.validado.params.id, contexto(req)) });
+  async alternarAtivo(req, res) {
+    res.json({ produto: await produtosService.alternarAtivo(req.validado.params.id, contexto(req)) });
   },
-  ajustarEstoque(req, res) {
-    res.json({ produto: produtosService.ajustarEstoque(req.validado.params.id, req.validado.body, contexto(req)) });
+  async ajustarEstoque(req, res) {
+    res.json({ produto: await produtosService.ajustarEstoque(req.validado.params.id, req.validado.body, contexto(req)) });
   },
-  emFalta(_req, res) {
-    res.json({ produtos: produtosService.emFalta() });
+  async emFalta(_req, res) {
+    res.json({ produtos: await produtosService.emFalta() });
   }
 };
 
 export const promocoesController = {
-  listar(_req, res) {
-    res.json({ promocoes: promocoesService.listar() });
+  async listar(_req, res) {
+    res.json({ promocoes: await promocoesService.listar() });
   },
-  salvar(req, res) {
-    res.status(201).json({ promocao: promocoesService.salvar(req.validado.body, contexto(req)) });
+  async salvar(req, res) {
+    res.status(201).json({ promocao: await promocoesService.salvar(req.validado.body, contexto(req)) });
   },
-  remover(req, res) {
-    promocoesService.remover(req.validado.params.id, contexto(req));
+  async remover(req, res) {
+    await promocoesService.remover(req.validado.params.id, contexto(req));
     res.json({ ok: true });
   }
 };
 
 export const cuponsController = {
-  listar(_req, res) {
-    res.json({ cupons: cuponsService.listar() });
+  async listar(_req, res) {
+    res.json({ cupons: await cuponsService.listar() });
   },
-  criar(req, res) {
-    res.status(201).json({ cupom: cuponsService.criar(req.validado.body, contexto(req)) });
+  async criar(req, res) {
+    res.status(201).json({ cupom: await cuponsService.criar(req.validado.body, contexto(req)) });
   },
-  alternarAtivo(req, res) {
-    res.json({ cupom: cuponsService.alternarAtivo(req.validado.params.id, contexto(req)) });
+  async alternarAtivo(req, res) {
+    res.json({ cupom: await cuponsService.alternarAtivo(req.validado.params.id, contexto(req)) });
   },
-  remover(req, res) {
-    cuponsService.remover(req.validado.params.id, contexto(req));
+  async remover(req, res) {
+    await cuponsService.remover(req.validado.params.id, contexto(req));
     res.json({ ok: true });
   }
 };
 
 export const mesasController = {
-  listar(_req, res) {
-    res.json({ mesas: mesasService.listar() });
+  async listar(_req, res) {
+    res.json({ mesas: await mesasService.listar() });
   },
-  adicionar(req, res) {
-    res.status(201).json({ mesa: mesasService.adicionar(contexto(req)) });
+  async adicionar(req, res) {
+    res.status(201).json({ mesa: await mesasService.adicionar(contexto(req)) });
   },
-  remover(req, res) {
-    mesasService.remover(req.validado.params.n, contexto(req));
+  async remover(req, res) {
+    await mesasService.remover(req.validado.params.n, contexto(req));
     res.json({ ok: true });
   },
-  abrir(req, res) {
-    res.json({ mesa: mesasService.abrir(req.validado.params.n, contexto(req)) });
+  async abrir(req, res) {
+    res.json({ mesa: await mesasService.abrir(req.validado.params.n, contexto(req)) });
   },
-  fecharConta(req, res) {
-    res.json({ conta: mesasService.fecharConta(req.validado.params.n, contexto(req)) });
+  async fecharConta(req, res) {
+    res.json({ conta: await mesasService.fecharConta(req.validado.params.n, contexto(req)) });
   },
-  liberar(req, res) {
-    res.json({ mesa: mesasService.liberar(req.validado.params.n, contexto(req)) });
+  async liberar(req, res) {
+    res.json({ mesa: await mesasService.liberar(req.validado.params.n, contexto(req)) });
   }
 };
 
 export const entregaController = {
-  config(_req, res) {
-    res.json({ entrega: entregaService.config() });
+  async config(_req, res) {
+    res.json({ entrega: await entregaService.config() });
   },
-  salvar(req, res) {
-    res.json({ entrega: entregaService.salvarConfig(req.validado.body, contexto(req)) });
+  async salvar(req, res) {
+    res.json({ entrega: await entregaService.salvarConfig(req.validado.body, contexto(req)) });
   },
   /* O mapa passa pelo servidor para o token nao aparecer na URL da imagem. */
   async mapa(_req, res) {
-    const loja = entregaService.config();
+    const loja = await entregaService.config();
     if (loja.lng == null) return res.status(404).json({ erro: "Marque o ponto da loja primeiro." });
     const imagem = await mapaEstatico({
       lng: loja.lng, lat: loja.lat, raios: loja.zones.map(zona => Number(zona.km)).filter(Boolean)
@@ -132,17 +141,17 @@ export const entregaController = {
 };
 
 export const relatoriosController = {
-  dashboard(req, res) {
-    res.json(relatoriosService.dashboard(req.validado.query));
+  async dashboard(req, res) {
+    res.json(await relatoriosService.dashboard(req.validado.query));
   },
-  exportacao(req, res) {
-    res.json(relatoriosService.exportacao(req.validado.query));
+  async exportacao(req, res) {
+    res.json(await relatoriosService.exportacao(req.validado.query));
   }
 };
 
 export const usuariosController = {
-  listar(_req, res) {
-    res.json({ usuarios: usuariosService.listar() });
+  async listar(_req, res) {
+    res.json({ usuarios: await usuariosService.listar() });
   },
   async criar(req, res) {
     res.status(201).json({ usuario: await usuariosService.criar(req.validado.body, contexto(req)) });
@@ -158,16 +167,16 @@ export const usuariosController = {
     await usuariosService.remover(Number(req.validado.params.id), contexto(req));
     res.json({ ok: true });
   },
-  auditoria(req, res) {
-    res.json({ registros: usuariosService.auditoria(req.validado.query) });
+  async auditoria(req, res) {
+    res.json({ registros: await usuariosService.auditoria(req.validado.query) });
   }
 };
 
 export const ajustesController = {
-  ler(_req, res) {
-    res.json({ ajustes: ajustesRepo.todos() });
+  async ler(_req, res) {
+    res.json({ ajustes: await ajustesRepo.todos() });
   },
-  gravar(req, res) {
-    res.json({ ajustes: ajustesRepo.gravarVarios(req.validado.body) });
+  async gravar(req, res) {
+    res.json({ ajustes: await ajustesRepo.gravarVarios(req.validado.body) });
   }
 };

@@ -5,15 +5,20 @@
  * suite acusa. */
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { prepararSchema, temBancoDeTeste, AVISO_SEM_BANCO } from "./apoio/banco.js";
+
+/* Sem Postgres de teste nao ha o que exercitar: a suite inteira e de
+ * integracao contra o banco de verdade. Pular avisando e melhor do que falhar
+ * com erro de conexao, que nao diz o que fazer. */
+if (!temBancoDeTeste) {
+  test("suite de API", { skip: AVISO_SEM_BANCO }, () => {});
+  process.exit(0);
+}
 
 /* O modulo de configuracao le process.env na importacao, entao o ambiente
  * precisa estar montado antes de qualquer import da aplicacao. */
-const PASTA = fs.mkdtempSync(path.join(os.tmpdir(), "baixok-teste-"));
+const banco = await prepararSchema("api");
 process.env.NODE_ENV = "test";
-process.env.DATA_DIR = PASTA;
 process.env.LOG_LEVEL = "silent";
 process.env.ADMIN_BOOTSTRAP_PASSWORD = "senha-do-teste-1234";
 /* PORT nao entra aqui: o teste chama listen(0) direto e deixa o sistema
@@ -26,7 +31,7 @@ process.env.LIMITE_PEDIDO = "500";
 process.env.LIMITE_GERAL = "5000";
 process.env.LIMITE_LOGIN = "10";
 
-const { abrirBanco, fecharBanco } = await import("../src/db/connection.js");
+const { abrirPool, fecharPool } = await import("../src/db/postgres.js");
 const { migrar } = await import("../src/db/migrate.js");
 const { semear } = await import("../src/db/seed.js");
 const { criarApp } = await import("../src/app.js");
@@ -35,8 +40,8 @@ const { produtosRepo } = await import("../src/repositories/produtos.repo.js");
 const { cuponsRepo } = await import("../src/repositories/cupons.repo.js");
 const { mesasRepo } = await import("../src/repositories/mesas.repo.js");
 
-abrirBanco();
-migrar();
+abrirPool();
+await migrar();
 await semear({ silencioso: true });
 
 const admin = { id: 1, usuario: "admin" };
@@ -53,10 +58,10 @@ const servidor = criarApp().listen(0);
 await new Promise(resolve => servidor.once("listening", resolve));
 const BASE = `http://127.0.0.1:${servidor.address().port}`;
 
-test.after(() => {
+test.after(async () => {
   servidor.close();
-  fecharBanco();
-  fs.rmSync(PASTA, { recursive: true, force: true });
+  await fecharPool();
+  await banco.derrubar();
 });
 
 // ------------------------------------------------------------------ auxiliar ---
@@ -100,7 +105,7 @@ const sessaoCozinha = await entrar("cozinha1", "senha-cozinha-1234");
 
 // ===================================================== superficie publica ===
 test("cardapio publico nao vaza cupons, estoque nem faixas de entrega", async () => {
-  cuponsRepo.criar({ code: "SECRETO50", kind: "pct", amount: 50, min: 0, once: false, until: "" });
+  await cuponsRepo.criar({ code: "SECRETO50", kind: "pct", amount: 50, min: 0, once: false, until: "" });
 
   const { status, corpo } = await chamar("/api/publico/cardapio");
   assert.equal(status, 200);
@@ -133,7 +138,7 @@ test("telao nao expoe telefone nem endereco do cliente", async () => {
 
 // ============================================== preco vem sempre do servidor ===
 test("preco enviado pelo cliente e ignorado", async () => {
-  const produto = produtosRepo.listar()[0];
+  const produto = (await produtosRepo.listar())[0];
 
   const { status, corpo } = await chamar("/api/publico/pedidos", {
     metodo: "POST",
@@ -155,8 +160,8 @@ test("preco enviado pelo cliente e ignorado", async () => {
 });
 
 test("pedido acima do estoque e recusado e nao deixa baixa pela metade", async () => {
-  const produto = produtosRepo.listar().find(item => item.stock > 0);
-  const estoqueAntes = produtosRepo.buscar(produto.id).stock;
+  const produto = (await produtosRepo.listar()).find(item => item.stock > 0);
+  const estoqueAntes = (await produtosRepo.buscar(produto.id)).stock;
 
   const { status, corpo } = await chamar("/api/publico/pedidos", {
     metodo: "POST",
@@ -169,11 +174,11 @@ test("pedido acima do estoque e recusado e nao deixa baixa pela metade", async (
 
   assert.equal(status, 409);
   assert.equal(corpo.codigo, "estoque_insuficiente");
-  assert.equal(produtosRepo.buscar(produto.id).stock, estoqueAntes, "estoque nao pode mudar num pedido recusado");
+  assert.equal((await produtosRepo.buscar(produto.id)).stock, estoqueAntes, "estoque nao pode mudar num pedido recusado");
 });
 
 test("pedidos simultaneos nao vendem alem do estoque", async () => {
-  const produto = produtosRepo.criar({
+  const produto = await produtosRepo.criar({
     id: "teste-corrida", name: "Item Escasso", category: "porcoes", price: 10,
     stock: 5, minStock: 0, active: true, image: "", badge: "Teste", description: ""
   });
@@ -189,12 +194,12 @@ test("pedidos simultaneos nao vendem alem do estoque", async () => {
 
   const aceitos = respostas.filter(resposta => resposta.status === 201).length;
   assert.equal(aceitos, 5, `deveriam passar exatamente 5 pedidos, passaram ${aceitos}`);
-  assert.equal(produtosRepo.buscar(produto.id).stock, 0);
+  assert.equal((await produtosRepo.buscar(produto.id)).stock, 0);
 });
 
 test("pedido em mesa fechada e recusado", async () => {
-  const produto = produtosRepo.listar()[0];
-  const mesaFechada = mesasRepo.listar().find(mesa => mesa.status === "livre");
+  const produto = (await produtosRepo.listar())[0];
+  const mesaFechada = (await mesasRepo.listar()).find(mesa => mesa.status === "livre");
 
   const { status, corpo } = await chamar("/api/publico/pedidos", {
     metodo: "POST",
@@ -229,7 +234,7 @@ test("cozinha nao cancela pedido nem mexe em preco", async () => {
 });
 
 test("caixa nao muda preco, nao ve faturamento e nao lista cupons", async () => {
-  const produto = produtosRepo.listar()[0];
+  const produto = (await produtosRepo.listar())[0];
 
   const alterar = await chamar(`/api/painel/produtos/${produto.id}`, {
     metodo: "PUT", sessao: sessaoCaixa,
@@ -242,19 +247,19 @@ test("caixa nao muda preco, nao ve faturamento e nao lista cupons", async () => 
 });
 
 test("caixa faz o trabalho dele: estoque, mesas e lancamento manual", async () => {
-  const produto = produtosRepo.listar()[0];
+  const produto = (await produtosRepo.listar())[0];
 
   const estoque = await chamar(`/api/painel/produtos/${produto.id}/estoque`, {
     metodo: "PATCH", corpo: { delta: 3 }, sessao: sessaoCaixa
   });
   assert.equal(estoque.status, 200);
 
-  const mesa = mesasRepo.listar()[0];
+  const mesa = (await mesasRepo.listar())[0];
   assert.equal((await chamar(`/api/painel/mesas/${mesa.n}/abrir`, { metodo: "POST", sessao: sessaoCaixa })).status, 200);
 });
 
 test("ninguem se promove sozinho", async () => {
-  const caixa = usuariosService.listar().find(item => item.usuario === "caixa1");
+  const caixa = (await usuariosService.listar()).find(item => item.usuario === "caixa1");
   const { status } = await chamar(`/api/painel/usuarios/${caixa.id}`, {
     metodo: "PATCH", corpo: { papel: "admin" }, sessao: sessaoCaixa
   });
@@ -329,7 +334,7 @@ test("validacao recusa entrada malformada", async () => {
 });
 
 test("promocao nao pode custar mais que o preco cheio", async () => {
-  const produto = produtosRepo.listar()[0];
+  const produto = (await produtosRepo.listar())[0];
   const { status } = await chamar("/api/painel/promocoes", {
     metodo: "POST", sessao: sessaoAdmin,
     corpo: { productId: produto.id, price: produto.price + 10, until: "" }
@@ -350,8 +355,8 @@ test("imagem de produto so aceita caminho do site ou data URL", async () => {
 
 // ==================================================================== cupom ===
 test("cupom de uso unico e barrado no segundo pedido do mesmo telefone", async () => {
-  cuponsRepo.criar({ code: "UMAVEZ", kind: "val", amount: 5, min: 0, once: true, until: "" });
-  const produto = produtosRepo.criar({
+  await cuponsRepo.criar({ code: "UMAVEZ", kind: "val", amount: 5, min: 0, once: true, until: "" });
+  const produto = await produtosRepo.criar({
     id: "teste-cupom", name: "Item Cupom", category: "porcoes", price: 30,
     stock: 20, minStock: 0, active: true, image: "", badge: "Teste", description: ""
   });
@@ -372,7 +377,7 @@ test("cupom de uso unico e barrado no segundo pedido do mesmo telefone", async (
 });
 
 test("cupom desconhecido nao derruba o pedido, so nao desconta", async () => {
-  const produto = produtosRepo.buscar("teste-cupom");
+  const produto = await produtosRepo.buscar("teste-cupom");
   const { status, corpo } = await chamar("/api/publico/pedidos", {
     metodo: "POST",
     corpo: {
@@ -386,7 +391,7 @@ test("cupom desconhecido nao derruba o pedido, so nao desconta", async () => {
 
 // =============================================================== auditoria ===
 test("cancelamento devolve estoque uma vez so e fica registrado", async () => {
-  const produto = produtosRepo.criar({
+  const produto = await produtosRepo.criar({
     id: "teste-cancela", name: "Item Cancelavel", category: "porcoes", price: 20,
     stock: 10, minStock: 0, active: true, image: "", badge: "Teste", description: ""
   });
@@ -396,20 +401,20 @@ test("cancelamento devolve estoque uma vez so e fica registrado", async () => {
     corpo: { customer: "Cliente", items: [{ id: produto.id, qty: 3 }], fulfillment: "retirada" }
   });
   assert.equal(criado.status, 201);
-  assert.equal(produtosRepo.buscar(produto.id).stock, 7);
+  assert.equal((await produtosRepo.buscar(produto.id)).stock, 7);
 
   const id = criado.corpo.pedido.id;
   const primeiro = await chamar(`/api/painel/pedidos/${id}/cancelar`, {
     metodo: "POST", corpo: { motivo: "cliente desistiu" }, sessao: sessaoCaixa
   });
   assert.equal(primeiro.status, 200);
-  assert.equal(produtosRepo.buscar(produto.id).stock, 10, "cancelar devolve o estoque");
+  assert.equal((await produtosRepo.buscar(produto.id)).stock, 10, "cancelar devolve o estoque");
 
   const segundo = await chamar(`/api/painel/pedidos/${id}/cancelar`, {
     metodo: "POST", corpo: { motivo: "clique duplo" }, sessao: sessaoCaixa
   });
   assert.equal(segundo.status, 409, "cancelar duas vezes nao pode inflar o estoque");
-  assert.equal(produtosRepo.buscar(produto.id).stock, 10);
+  assert.equal((await produtosRepo.buscar(produto.id)).stock, 10);
 
   const { corpo } = await chamar("/api/painel/auditoria?entidade=pedido", { sessao: sessaoAdmin });
   const registro = corpo.registros.find(item => item.entidade_id === id && item.acao === "pedido_cancelado");

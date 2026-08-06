@@ -17,10 +17,10 @@ que distribuida em camadas. Este documento nao trata aquele codigo como lixo.
 
 ```
 backend/src/
-├── index.js            sobe o processo: abre banco, migra, escuta
+├── index.js            sobe o processo: abre o pool, migra, escuta
 ├── app.js              monta o Express (helmet, CSP, estaticos, ordem dos middlewares)
 ├── config/             env validado por schema, constantes do dominio
-├── db/                 conexao, migrations, seed, importador do legado, backup
+├── db/                 pool do Postgres, migrations, seed, importador do legado
 ├── middlewares/        auth, RBAC, CSRF, validacao, rate limit, tratamento de erro
 ├── routes/             o que existe e quem pode chamar
 ├── controllers/        traducao HTTP <-> dominio, e so isso
@@ -42,8 +42,12 @@ frontend/src/
 O caminho de uma requisicao e sempre o mesmo:
 
 ```
-rota  →  middleware  →  controller  →  service  →  repository  →  SQLite
+rota  →  middleware  →  controller  →  service  →  repository  →  Postgres
 ```
+
+Da metade para a direita tudo e assincrono. O SQLite embutido respondia na hora,
+e por isso services e controllers eram sincronos; o Postgres responde pela rede,
+entao cada acesso e um `await` e ele sobe por todas as camadas ate o handler.
 
 Cada camada tem uma regra que a define:
 
@@ -72,22 +76,36 @@ que o front ja usava: `name`, `minStock`, `createdAt`).
 > misturado duas mudancas grandes numa so. O repositorio isola a traducao, entao
 > padronizar os nomes depois e uma alteracao contida.
 
-## Por que node:sqlite e nao better-sqlite3
+## Por que Postgres (Supabase) e nao mais o SQLite embutido
 
-`better-sqlite3` exige compilacao nativa. A rede onde este sistema e instalado
-intercepta TLS, o download do binario pre-compilado falha, e o `node-gyp` nao
-completa — `npm ci` simplesmente nao termina.
+O `node:sqlite` resolvia bem a loja com um computador so: banco num arquivo,
+nada para compilar, `npm ci` funcionando numa rede que intercepta TLS. O que ele
+nao resolve e o sistema rodar hospedado — o disco de um host de aplicacao e
+efemero, e o arquivo do banco vai embora a cada publicacao.
 
-`node:sqlite` vem no Node, entrega a mesma API sincrona e nao tem nada para
-compilar. Mesmo motivo para o hash de senha usar `scrypt` do `node:crypto` em vez
-de argon2 ou bcrypt.
+O Postgres do Supabase e o mesmo esquema, com o dado fora do processo. Duas
+consequencias que atravessam o codigo inteiro:
 
-O `DatabaseSync` e marcado experimental no Node 24, e os scripts silenciam o
-aviso. Se for preciso trocar depois, o unico arquivo afetado e
-`db/connection.js`: os repositories usam `prepare/run/get/all`, que e a mesma API
-do `better-sqlite3`.
+- **Tudo virou assincrono.** Foi o custo real da troca: `prepare/get/all`
+  sincronos viraram `await`, e isso subiu por repositories, services e
+  controllers.
+- **Ha varias instancias possiveis.** As migrations rodam sob
+  `pg_advisory_xact_lock`, senao dois processos subindo juntos tentam criar as
+  mesmas tabelas.
 
-## Por que SQLite e nao um JSON
+O acesso continua concentrado num arquivo, `db/postgres.js`. Ele expoe
+`todos/um/alteradas/emTransacao`, e a transacao usa `AsyncLocalStorage` para que
+os repositories descubram sozinhos se estao dentro de uma — sem isso, os ~130
+pontos de acesso ganhariam um parametro de conexao so para sobreviver.
+
+O `pg` foi escolhido no lugar do `@supabase/supabase-js` porque o supabase-js
+fala HTTP com o PostgREST, e HTTP nao tem transacao. A baixa de estoque depende
+de transacao de verdade.
+
+Backup deixou de ser trabalho do processo (o `VACUUM INTO` diario saiu junto com
+o SQLite): quem faz e o proprio Supabase, em Database -> Backups.
+
+## Por que um banco e nao um JSON
 
 O `data/baixo-k.json` era um documento unico reescrito inteiro a cada alteracao.
 Duas pessoas editando o cardapio ao mesmo tempo: a ultima gravacao apagava a

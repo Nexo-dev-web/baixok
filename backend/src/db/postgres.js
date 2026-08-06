@@ -50,12 +50,20 @@ export function abrirPool() {
     throw new Error("SUPABASE_DATABASE_URL nao configurada: sem ela nao ha banco para abrir.");
   }
 
+  /* `sslmode=disable` na URL desliga o TLS por completo.
+   *
+   * Existe para o Postgres local dos testes, que nao fala TLS: com `ssl` ligado
+   * o driver pede SSLRequest, o servidor responde que nao tem, e a conexao morre
+   * antes da primeira consulta. O Supabase nunca aparece com esse parametro —
+   * la o TLS continua obrigatorio pelo caminho de baixo. */
+  const semTls = /[?&]sslmode=disable(&|$)/.test(env.SUPABASE_DATABASE_URL);
+
   pool = new Pool({
     connectionString: env.SUPABASE_DATABASE_URL,
     /* O Supabase exige TLS. SUPABASE_INSECURE_TLS existe porque a rede da loja
      * intercepta certificado — o mesmo motivo que ja obrigou a flag no resto do
      * projeto. Em producao ela fica desligada e o certificado e conferido. */
-    ssl: { rejectUnauthorized: !env.SUPABASE_INSECURE_TLS },
+    ssl: semTls ? false : { rejectUnauthorized: !env.SUPABASE_INSECURE_TLS },
     max: 10,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000

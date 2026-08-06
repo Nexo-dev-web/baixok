@@ -4,14 +4,15 @@
   "private": true,
   "type": "module",
   "main": "src/index.js",
-  "comentario": "--disable-warning=ExperimentalWarning silencia o aviso do node:sqlite. A API que usamos (DatabaseSync) e estavel na pratica; o aviso a cada subida so acostuma a equipe a ignorar avisos.",
+  "comentario": "O --disable-warning=ExperimentalWarning saiu junto com o node:sqlite: o banco agora e o Postgres via `pg`, que nao emite aviso nenhum. Deixar a flag esconderia avisos experimentais de verdade se algum aparecer.",
+  "comentario-test": "A suite e de integracao e precisa de um Postgres proprio em TEST_DATABASE_URL — veja tests/apoio/banco.js. Sem a variavel ela se pula avisando, em vez de rodar contra o banco da loja.",
   "scripts": {
-    "dev": "node --disable-warning=ExperimentalWarning --watch src/index.js",
-    "start": "node --disable-warning=ExperimentalWarning src/index.js",
-    "migrate": "node --disable-warning=ExperimentalWarning src/db/migrate.js",
-    "seed": "node --disable-warning=ExperimentalWarning src/db/seed.js",
-    "import:legado": "node --disable-warning=ExperimentalWarning src/db/import-legado.js",
-    "test": "node --disable-warning=ExperimentalWarning --test"
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "migrate": "node src/db/migrate.js",
+    "seed": "node src/db/seed.js",
+    "import:legado": "node src/db/import-legado.js",
+    "test": "node --test"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",

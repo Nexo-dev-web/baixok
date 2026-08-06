@@ -17,9 +17,16 @@ export const produtosService = {
   /* Cardapio publico: produtos a venda ja com o preco promocional aplicado.
    * O cliente nunca ve estoque_min nem a quantidade exata em estoque — sao
    * dados de operacao. */
-  cardapioPublico() {
-    const promocoes = new Map(promocoesRepo.listarPublico().map(promo => [promo.productId, promo.price]));
-    return produtosRepo.listarPublico().map(produto => ({
+  async cardapioPublico() {
+    /* As duas consultas nao dependem uma da outra: em paralelo, o cardapio custa
+     * uma ida ao banco em vez de duas em fila. */
+    const [promos, produtos] = await Promise.all([
+      promocoesRepo.listarPublico(),
+      produtosRepo.listarPublico()
+    ]);
+    const promocoes = new Map(promos.map(promo => [promo.productId, promo.price]));
+
+    return produtos.map(produto => ({
       ...produto,
       precoOriginal: promocoes.has(produto.id) ? produto.price : null,
       price: promocoes.get(produto.id) ?? produto.price,
@@ -27,19 +34,19 @@ export const produtosService = {
     }));
   },
 
-  buscar(id) {
-    const produto = produtosRepo.buscar(id);
+  async buscar(id) {
+    const produto = await produtosRepo.buscar(id);
     if (!produto) throw naoEncontrado("Produto nao encontrado.");
     return produto;
   },
 
-  criar(dados, { usuario, ip }) {
-    const produto = produtosRepo.criar({
+  async criar(dados, { usuario, ip }) {
+    const produto = await produtosRepo.criar({
       ...dados,
       id: uid("prod"),
       badge: SELO_POR_CATEGORIA[dados.category] || "Item"
     });
-    auditoriaRepo.registrar({
+    await auditoriaRepo.registrar({
       usuarioId: usuario.id, usuario: usuario.usuario, acao: "produto_criado",
       entidade: "produto", entidadeId: produto.id, detalhes: { nome: produto.name, preco: produto.price }, ip
     });
@@ -47,9 +54,9 @@ export const produtosService = {
     return produto;
   },
 
-  atualizar(id, dados, { usuario, ip }) {
-    const anterior = this.buscar(id);
-    const produto = produtosRepo.atualizar(id, {
+  async atualizar(id, dados, { usuario, ip }) {
+    const anterior = await this.buscar(id);
+    const produto = await produtosRepo.atualizar(id, {
       ...dados,
       badge: SELO_POR_CATEGORIA[dados.category] || "Item"
     });
@@ -61,7 +68,7 @@ export const produtosService = {
         .filter(([chave, valor]) => anterior[chave] !== valor && chave !== "image")
         .map(([chave, valor]) => [chave, { de: anterior[chave], para: valor }])
     );
-    auditoriaRepo.registrar({
+    await auditoriaRepo.registrar({
       usuarioId: usuario.id, usuario: usuario.usuario, acao: "produto_alterado",
       entidade: "produto", entidadeId: id, detalhes: mudancas, ip
     });
@@ -69,22 +76,22 @@ export const produtosService = {
     return produto;
   },
 
-  remover(id, { usuario, ip }) {
-    const produto = this.buscar(id);
+  async remover(id, { usuario, ip }) {
+    const produto = await this.buscar(id);
     /* Nao apagamos produto que ja apareceu em pedido: a exclusao levaria junto o
      * historico de vendas. O caminho para tirar do cardapio e desativar. */
-    if (!produtosRepo.remover(id)) throw naoEncontrado("Produto nao encontrado.");
-    auditoriaRepo.registrar({
+    if (!(await produtosRepo.remover(id))) throw naoEncontrado("Produto nao encontrado.");
+    await auditoriaRepo.registrar({
       usuarioId: usuario.id, usuario: usuario.usuario, acao: "produto_removido",
       entidade: "produto", entidadeId: id, detalhes: { nome: produto.name }, ip
     });
     publicar("produtos", [CANAL.PUBLICO, CANAL.OPERACAO]);
   },
 
-  alternarAtivo(id, { usuario, ip }) {
-    this.buscar(id);
-    const produto = produtosRepo.alternarAtivo(id);
-    auditoriaRepo.registrar({
+  async alternarAtivo(id, { usuario, ip }) {
+    await this.buscar(id);
+    const produto = await produtosRepo.alternarAtivo(id);
+    await auditoriaRepo.registrar({
       usuarioId: usuario.id, usuario: usuario.usuario,
       acao: produto.active ? "produto_ativado" : "produto_pausado",
       entidade: "produto", entidadeId: id, ip
@@ -93,13 +100,13 @@ export const produtosService = {
     return produto;
   },
 
-  ajustarEstoque(id, { delta, valor }, { usuario, ip }) {
-    const anterior = this.buscar(id);
+  async ajustarEstoque(id, { delta, valor }, { usuario, ip }) {
+    const anterior = await this.buscar(id);
     const produto = valor !== undefined
-      ? produtosRepo.definirEstoque(id, valor)
-      : produtosRepo.ajustarEstoque(id, delta);
+      ? await produtosRepo.definirEstoque(id, valor)
+      : await produtosRepo.ajustarEstoque(id, delta);
 
-    auditoriaRepo.registrar({
+    await auditoriaRepo.registrar({
       usuarioId: usuario.id, usuario: usuario.usuario, acao: "estoque_ajustado",
       entidade: "produto", entidadeId: id,
       detalhes: { de: anterior.stock, para: produto.stock, nome: produto.name }, ip
@@ -112,8 +119,8 @@ export const produtosService = {
 export const promocoesService = {
   listar: () => promocoesRepo.listar(),
 
-  salvar(dados, { usuario, ip }) {
-    const produto = produtosRepo.buscar(dados.productId);
+  async salvar(dados, { usuario, ip }) {
+    const produto = await produtosRepo.buscar(dados.productId);
     if (!produto) throw naoEncontrado("Produto nao encontrado.");
 
     /* Regra que o schema nao consegue expressar: depende do preco cadastrado.
@@ -127,8 +134,8 @@ export const promocoesService = {
       );
     }
 
-    const promocao = promocoesRepo.salvar({ ...dados, id: uid("promo") });
-    auditoriaRepo.registrar({
+    const promocao = await promocoesRepo.salvar({ ...dados, id: uid("promo") });
+    await auditoriaRepo.registrar({
       usuarioId: usuario.id, usuario: usuario.usuario, acao: "promocao_salva",
       entidade: "promocao", entidadeId: promocao.id,
       detalhes: { produto: produto.name, de: produto.price, para: dados.price }, ip
@@ -137,9 +144,9 @@ export const promocoesService = {
     return promocao;
   },
 
-  remover(id, { usuario, ip }) {
-    if (!promocoesRepo.remover(id)) throw naoEncontrado("Promocao nao encontrada.");
-    auditoriaRepo.registrar({
+  async remover(id, { usuario, ip }) {
+    if (!(await promocoesRepo.remover(id))) throw naoEncontrado("Promocao nao encontrada.");
+    await auditoriaRepo.registrar({
       usuarioId: usuario.id, usuario: usuario.usuario, acao: "promocao_encerrada",
       entidade: "promocao", entidadeId: id, ip
     });

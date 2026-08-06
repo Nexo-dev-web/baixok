@@ -6,8 +6,8 @@
 import { pedidosService } from "../services/pedidos.service.js";
 
 export const telaoController = {
-  fila(_req, res) {
-    const fila = pedidosService.listarParaTelao();
+  async fila(_req, res) {
+    const fila = await pedidosService.listarParaTelao();
     res.set("Cache-Control", "no-store").json({
       preparo: fila.filter(pedido => pedido.status === "preparo"),
       pronto: fila.filter(pedido => pedido.status === "pronto")

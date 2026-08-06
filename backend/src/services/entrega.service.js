@@ -13,10 +13,10 @@ export const entregaService = {
   config: () => entregaRepo.config(),
   configPublica: () => entregaRepo.configPublica(),
 
-  salvarConfig(dados, { usuario, ip }) {
-    entregaRepo.salvarConfig({ endereco: dados.endereco, lng: dados.lng, lat: dados.lat });
-    entregaRepo.substituirFaixas(dados.zones);
-    auditoriaRepo.registrar({
+  async salvarConfig(dados, { usuario, ip }) {
+    await entregaRepo.salvarConfig({ endereco: dados.endereco, lng: dados.lng, lat: dados.lat });
+    await entregaRepo.substituirFaixas(dados.zones);
+    await auditoriaRepo.registrar({
       usuarioId: usuario.id, usuario: usuario.usuario, acao: "entrega_configurada",
       entidade: "entrega", detalhes: { faixas: dados.zones.length, endereco: dados.endereco }, ip
     });
@@ -25,8 +25,8 @@ export const entregaService = {
   },
 
   /* Calculo puro sobre uma coordenada ja conhecida. */
-  calcularParaCoordenada(endereco, coordenada) {
-    const loja = entregaRepo.config();
+  async calcularParaCoordenada(endereco, coordenada) {
+    const loja = await entregaRepo.config();
     if (loja.lng == null || loja.lat == null || !loja.zones.length) {
       return { configurado: false, dentro: false, taxa: 0, km: null, zona: null, minimo: 0, endereco };
     }
@@ -46,13 +46,13 @@ export const entregaService = {
   /* Cotacao a partir do texto do endereco. Chamada de fora da transacao do
    * pedido, porque faz I/O de rede. */
   async cotarPorEndereco(endereco) {
-    const loja = entregaRepo.config();
+    const loja = await entregaRepo.config();
     const achados = await geocodificar(endereco, loja);
     if (!achados.length) throw new ErroApp("Nao encontramos esse endereco.", 404, "endereco_nao_encontrado");
     return this.calcularParaCoordenada(endereco, achados[0]);
   },
 
   async buscarEnderecos(termo) {
-    return geocodificar(termo, entregaRepo.config());
+    return geocodificar(termo, await entregaRepo.config());
   }
 };

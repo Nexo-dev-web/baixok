@@ -15,12 +15,20 @@ import { tokenPublico, temToken } from "../lib/mapbox.js";
 import { ipDe } from "./contexto.js";
 
 export const publicoController = {
-  /* Tudo que o cardapio precisa para desenhar, numa chamada. */
-  cardapio(_req, res) {
-    const ajustes = ajustesRepo.todos();
+  /* Tudo que o cardapio precisa para desenhar, numa chamada.
+   *
+   * E a rota mais chamada do sistema — todo cliente que abre o cardapio passa
+   * por aqui. As tres consultas nao dependem uma da outra, entao vao juntas: em
+   * fila seriam tres idas ao Postgres antes do primeiro byte. */
+  async cardapio(_req, res) {
+    const [ajustes, produtos, entrega] = await Promise.all([
+      ajustesRepo.todos(),
+      produtosService.cardapioPublico(),
+      entregaService.configPublica()
+    ]);
     res.json({
-      produtos: produtosService.cardapioPublico(),
-      entrega: entregaService.configPublica(),
+      produtos,
+      entrega,
       loja: {
         nome: ajustes.nome_loja,
         endereco: ajustes.endereco_loja,
@@ -30,8 +38,8 @@ export const publicoController = {
   },
 
   /* Situacao da mesa: so o suficiente para o QR saber se pode aceitar pedido. */
-  statusMesa(req, res) {
-    const comanda = mesasService.comandaPublica(req.validado.params.n);
+  async statusMesa(req, res) {
+    const comanda = await mesasService.comandaPublica(req.validado.params.n);
     res.json(comanda);
   },
 
@@ -61,9 +69,9 @@ export const publicoController = {
    * Devolve so o efeito no carrinho dele. Nao existe rota publica que liste
    * cupons: o cliente precisa saber o codigo de antemao. O subtotal enviado
    * serve so para a previa — no fechamento o servidor recalcula tudo. */
-  validarCupom(req, res) {
+  async validarCupom(req, res) {
     const { code, subtotal, phone } = req.validado.body;
-    const resultado = cuponsService.avaliar({ code, subtotal, telefone: phone });
+    const resultado = await cuponsService.avaliar({ code, subtotal, telefone: phone });
     res.json({
       valido: resultado.valido,
       desconto: resultado.desconto,
@@ -77,7 +85,7 @@ export const publicoController = {
     /* Com coordenada vinda do widget poupamos uma chamada a Mapbox. Mesmo
      * forjada so engana a propria tela: o pedido e recalculado no fechamento. */
     const resultado = Number.isFinite(lng) && Number.isFinite(lat)
-      ? entregaService.calcularParaCoordenada(q, { lng, lat })
+      ? await entregaService.calcularParaCoordenada(q, { lng, lat })
       : await entregaService.cotarPorEndereco(q);
     res.json(resultado);
   },

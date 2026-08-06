@@ -3,7 +3,7 @@
  * Idempotente — rodar de novo nao duplica nada, so completa o que falta. */
 import { randomBytes } from "node:crypto";
 import { env } from "../config/env.js";
-import { abrirBanco, emTransacao } from "./connection.js";
+import { abrirPool, emTransacao, fecharPool } from "./postgres.js";
 import { migrar } from "./migrate.js";
 import { usuariosRepo } from "../repositories/usuarios.repo.js";
 import { produtosRepo } from "../repositories/produtos.repo.js";
@@ -33,8 +33,8 @@ const PERMISSOES_BALCAO = ["pedidos", "mesas", "estoque"];
 const PERMISSOES_COZINHA = ["pedidos"];
 
 export async function semear({ silencioso = false } = {}) {
-  abrirBanco();
-  migrar();
+  abrirPool();
+  await migrar();
 
   const avisar = (...args) => { if (!silencioso) console.log(...args); };
   const resultado = { admin: null, senhaGerada: null, produtos: 0, mesas: 0 };
@@ -43,10 +43,10 @@ export async function semear({ silencioso = false } = {}) {
    * padrao cravada no codigo, que e como instalacoes ficam abertas por anos. */
   const usuarioAdmin = env.ADMIN_BOOTSTRAP_USER === "admin" ? "baixok@food.com" : env.ADMIN_BOOTSTRAP_USER;
 
-  const adminExistente = usuariosRepo.buscarPorUsuario(usuarioAdmin);
+  const adminExistente = await usuariosRepo.buscarPorUsuario(usuarioAdmin);
   if (!adminExistente) {
     const senha = env.ADMIN_BOOTSTRAP_PASSWORD || randomBytes(12).toString("base64url");
-    const usuario = usuariosRepo.criar({
+    const usuario = await usuariosRepo.criar({
       usuario: usuarioAdmin,
       nome: "Admin Baixo K",
       senhaHash: await gerarHashSenha(senha),
@@ -64,7 +64,7 @@ export async function semear({ silencioso = false } = {}) {
     avisar("  Anote agora e troque no primeiro acesso.");
     avisar("=================================================\n");
   } else {
-    usuariosRepo.atualizar(adminExistente.id, {
+    await usuariosRepo.atualizar(adminExistente.id, {
       nome: "Admin Baixo K",
       papel: "admin",
       ativo: true,
@@ -72,31 +72,31 @@ export async function semear({ silencioso = false } = {}) {
       abasEditar: PERMISSOES_ADMIN
     });
     if (env.ADMIN_BOOTSTRAP_PASSWORD) {
-      usuariosRepo.trocarSenha(adminExistente.id, await gerarHashSenha(env.ADMIN_BOOTSTRAP_PASSWORD));
+      await usuariosRepo.trocarSenha(adminExistente.id, await gerarHashSenha(env.ADMIN_BOOTSTRAP_PASSWORD));
     }
     resultado.admin = adminExistente.usuario;
     avisar("Administrador padrao atualizado.");
   }
 
-  emTransacao(() => {
-    if (!produtosRepo.listar().length) {
+  await emTransacao(async () => {
+    if (!(await produtosRepo.listar()).length) {
       for (const produto of PRODUTOS_EXEMPLO) {
-        produtosRepo.criar({ ...produto, active: true, image: "" });
+        await produtosRepo.criar({ ...produto, active: true, image: "" });
         resultado.produtos += 1;
       }
     }
-    if (!mesasRepo.listar().length) {
+    if (!(await mesasRepo.listar()).length) {
       for (let n = 1; n <= MESAS_INICIAIS; n += 1) {
-        mesasRepo.criar(n);
+        await mesasRepo.criar(n);
         resultado.mesas += 1;
       }
     }
-    ajustesRepo.gravarVarios({ nome_loja: "Baixo K", taxa_servico_mesa: "0.1" });
+    await ajustesRepo.gravarVarios({ nome_loja: "Baixo K", taxa_servico_mesa: "0.1" });
   });
 
-  if (!usuariosRepo.buscarPorUsuario("balcao@baixok.com")) {
+  if (!(await usuariosRepo.buscarPorUsuario("balcao@baixok.com"))) {
     const senhaBalcao = env.BALCAO_BOOTSTRAP_PASSWORD || randomBytes(12).toString("base64url");
-    usuariosRepo.criar({
+    await usuariosRepo.criar({
       usuario: "balcao@baixok.com",
       nome: "Balcao Baixo K",
       senhaHash: await gerarHashSenha(senhaBalcao),
@@ -107,8 +107,8 @@ export async function semear({ silencioso = false } = {}) {
     avisar("Usuario de balcao criado: balcao@baixok.com");
     if (!env.BALCAO_BOOTSTRAP_PASSWORD) avisar(`Senha inicial do balcao: ${senhaBalcao}`);
   } else if (env.BALCAO_BOOTSTRAP_PASSWORD) {
-    const balcao = usuariosRepo.buscarPorUsuario("balcao@baixok.com");
-    usuariosRepo.trocarSenha(balcao.id, await gerarHashSenha(env.BALCAO_BOOTSTRAP_PASSWORD));
+    const balcao = await usuariosRepo.buscarPorUsuario("balcao@baixok.com");
+    await usuariosRepo.trocarSenha(balcao.id, await gerarHashSenha(env.BALCAO_BOOTSTRAP_PASSWORD));
     avisar("Senha do balcao atualizada.");
   }
 
@@ -118,8 +118,14 @@ export async function semear({ silencioso = false } = {}) {
 }
 
 if (process.argv[1]?.endsWith("seed.js")) {
-  semear().then(() => process.exit(0)).catch(erro => {
+  try {
+    await semear();
+  } catch (erro) {
     console.error("Falha no seed:", erro.message);
-    process.exit(1);
-  });
+    process.exitCode = 1;
+  } finally {
+    /* Fecha o pool em vez de process.exit(): com o Postgres ha conexoes abertas,
+     * e sair na marra deixaria a ultima transacao sem COMMIT confirmado. */
+    await fecharPool();
+  }
 }

@@ -74,7 +74,7 @@ function papelPadraoPorEmail(email, sugerido) {
   return PAPEIS.CAIXA;
 }
 
-function buscarUsuarioParaLogin(usuario) {
+async function buscarUsuarioParaLogin(usuario) {
   const login = normalizarEmail(usuario);
   return usuariosRepo.buscarPorUsuarioComHash(login);
 }
@@ -88,9 +88,9 @@ async function garantirUsuarioLocalDoSupabase(authUser, senha) {
   const abasVer = paraLista(metadados.abasVer).length ? paraLista(metadados.abasVer) : ABAS_POR_PADRAO[papel];
   const abasEditar = paraLista(metadados.abasEditar).length ? paraLista(metadados.abasEditar) : EDITAVEIS_POR_PADRAO[papel];
 
-  let local = usuariosRepo.buscarPorAuthId(authUser.id) || usuariosRepo.buscarPorUsuario(email);
+  const local = (await usuariosRepo.buscarPorAuthId(authUser.id)) || (await usuariosRepo.buscarPorUsuario(email));
   if (local) {
-    usuariosRepo.atualizarAuthId(local.id, authUser.id);
+    await usuariosRepo.atualizarAuthId(local.id, authUser.id);
     return usuariosRepo.buscar(local.id);
   }
 
@@ -165,9 +165,9 @@ export const authService = {
         const csrfToken = randomBytes(32).toString("base64url");
         const expiraEm = new Date(Date.now() + env.SESSION_TTL_MS).toISOString().replace("T", " ").slice(0, 19);
 
-        sessoesRepo.criar({ token, csrfToken, usuarioId: encontrado.id, expiraEm, ip, agente });
-        usuariosRepo.registrarLogin(encontrado.id);
-        auditoriaRepo.registrar({
+        await sessoesRepo.criar({ token, csrfToken, usuarioId: encontrado.id, expiraEm, ip, agente });
+        await usuariosRepo.registrarLogin(encontrado.id);
+        await auditoriaRepo.registrar({
           usuarioId: encontrado.id, usuario: encontrado.usuario, acao: "login", entidade: "sessao", ip
         });
 
@@ -186,7 +186,7 @@ export const authService = {
       }
     }
 
-    const encontrado = buscarUsuarioParaLogin(login);
+    const encontrado = await buscarUsuarioParaLogin(login);
 
     /* Mesmo sem usuario gastamos o tempo do hash. Sem isso, "login inexistente"
      * responde na hora e "senha errada" demora ~100ms - a diferenca entrega
@@ -210,9 +210,9 @@ export const authService = {
     const csrfToken = randomBytes(32).toString("base64url");
     const expiraEm = new Date(Date.now() + env.SESSION_TTL_MS).toISOString().replace("T", " ").slice(0, 19);
 
-    sessoesRepo.criar({ token, csrfToken, usuarioId: encontrado.id, expiraEm, ip, agente });
-    usuariosRepo.registrarLogin(encontrado.id);
-    auditoriaRepo.registrar({
+    await sessoesRepo.criar({ token, csrfToken, usuarioId: encontrado.id, expiraEm, ip, agente });
+    await usuariosRepo.registrarLogin(encontrado.id);
+    await auditoriaRepo.registrar({
       usuarioId: encontrado.id, usuario: encontrado.usuario, acao: "login", entidade: "sessao", ip
     });
 
@@ -223,11 +223,11 @@ export const authService = {
     };
   },
 
-  logout({ token, usuarioAtual, ip }) {
+  async logout({ token, usuarioAtual, ip }) {
     if (!token) return;
-    sessoesRepo.remover(token);
+    await sessoesRepo.remover(token);
     if (usuarioAtual) {
-      auditoriaRepo.registrar({
+      await auditoriaRepo.registrar({
         usuarioId: usuarioAtual.id, usuario: usuarioAtual.usuario, acao: "logout", entidade: "sessao", ip
       });
     }
@@ -236,9 +236,9 @@ export const authService = {
   /* Resolve a sessao do cookie. Devolve null em vez de lancar: quem decide se a
    * rota exige login e o middleware, nao esta funcao - o cardapio publico
    * tambem chama isto so para saber se deve mostrar o link do painel. */
-  resolverSessao(token) {
+  async resolverSessao(token) {
     if (!token) return null;
-    const sessao = sessoesRepo.buscarValida(token);
+    const sessao = await sessoesRepo.buscarValida(token);
     if (!sessao) return null;
     return {
       usuario: {
@@ -256,7 +256,7 @@ export const authService = {
 
   async trocarPropriaSenha({ usuarioAtual, senhaAtual, senhaNova, token, ip }) {
     const login = normalizarEmail(usuarioAtual.usuario);
-    const encontrado = usuariosRepo.buscarPorUsuarioComHash(login);
+    const encontrado = await usuariosRepo.buscarPorUsuarioComHash(login);
     if (!encontrado) {
       throw naoAutenticado("Senha atual incorreta.");
     }
@@ -266,27 +266,30 @@ export const authService = {
 
     if (supabaseAuth.ativo()) {
       const authUser = await supabaseAuth.autenticarComSenha(login, senhaAtual);
-      const local = usuariosRepo.buscarPorAuthId(authUser.id) || usuariosRepo.buscarPorUsuario(login);
-      if (!local || local.ativo !== 1) {
+      const local = (await usuariosRepo.buscarPorAuthId(authUser.id)) || (await usuariosRepo.buscarPorUsuario(login));
+      /* buscarPorAuthId e buscarPorUsuario passam pelo paraApi, que converte
+       * `ativo` para booleano. O `!== 1` de antes comparava com o INTEGER cru do
+       * SQLite e recusaria todo mundo aqui. */
+      if (!local || !local.ativo) {
         throw naoAutenticado("Senha atual incorreta.");
       }
-      usuariosRepo.atualizarAuthId(local.id, authUser.id);
+      await usuariosRepo.atualizarAuthId(local.id, authUser.id);
       await supabaseAuth.atualizarSenha(authUser.id, senhaNova);
     } else if (!(await conferirSenha(senhaAtual, encontrado.senha_hash))) {
       throw naoAutenticado("Senha atual incorreta.");
     }
 
-    usuariosRepo.trocarSenha(encontrado.id, await gerarHashSenha(senhaNova));
+    await usuariosRepo.trocarSenha(encontrado.id, await gerarHashSenha(senhaNova));
 
     /* Derruba as outras sessoes da pessoa e mantem a atual. Trocar senha porque
      * "acho que alguem viu" so serve se expulsar quem estava dentro. */
-    sessoesRepo.removerDoUsuario(encontrado.id);
+    await sessoesRepo.removerDoUsuario(encontrado.id);
     const csrfToken = randomBytes(32).toString("base64url");
     const novoToken = token || randomBytes(32).toString("base64url");
     const expiraEm = new Date(Date.now() + env.SESSION_TTL_MS).toISOString().replace("T", " ").slice(0, 19);
-    sessoesRepo.criar({ token: novoToken, csrfToken, usuarioId: encontrado.id, expiraEm, ip, agente: "" });
+    await sessoesRepo.criar({ token: novoToken, csrfToken, usuarioId: encontrado.id, expiraEm, ip, agente: "" });
 
-    auditoriaRepo.registrar({
+    await auditoriaRepo.registrar({
       usuarioId: encontrado.id, usuario: encontrado.usuario, acao: "senha_trocada", entidade: "usuario",
       entidadeId: encontrado.id, ip
     });
