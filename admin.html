@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Baixo K - Sistema</title>
-  <meta name="description" content="Sistema operacional Baixo K para pedidos, estoque, vendas e dashboard.">
+  <meta name="description" content="Sistema interno Baixo K: fila de pedidos, cozinha, mesas, produtos, promocoes, estoque e dashboard.">
   <meta property="og:title" content="Baixo K - Sistema">
   <meta property="og:description" content="Painel operacional do Baixo K.">
   <meta property="og:type" content="website">
@@ -17,255 +17,297 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700;800&family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Busca de endereco oficial da Mapbox, usada na aba Area de entrega -->
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css">
+  <script defer src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body data-page="admin">
-  <header class="topbar">
+  <aside class="side-nav" aria-label="Navegacao do sistema">
     <div class="brand">
       <img src="images/baixok-logo-v2.png" alt="Baixo K">
       <div>
         <strong>Baixo K</strong>
-        <span>Sistema operacional</span>
+        <span>Sistema interno</span>
       </div>
     </div>
-    <div class="top-actions">
-      <a class="secondary" href="index.html" target="_blank" rel="noopener">Cardapio</a>
-      <a class="secondary" href="https://www.instagram.com/baixok_/" target="_blank" rel="noopener">Instagram</a>
-      <button class="secondary install-button hidden" id="install-app" onclick="installApp()">Instalar app</button>
-      <button class="secondary" onclick="openSupport()">Suporte Nexo</button>
-      <a class="admin-link" href="telao.html" target="_blank" rel="noopener">Telao de pedidos</a>
-    </div>
-  </header>
 
-  <main class="admin-app">
-    <section class="ops-hero">
-      <div>
-        <span class="eyebrow">Central Baixo K</span>
-        <h1>Operacao da cozinha ao balcao</h1>
-        <p>Pedidos novos entram na primeira coluna. Ao arrastar para preparo, cozinha e balcao imprimem automaticamente.</p>
-      </div>
-      <div class="ops-actions">
-        <a class="primary" href="telao.html" target="_blank" rel="noopener">Abrir telao</a>
-        <button class="secondary" onclick="openSupport()">Suporte Nexo</button>
-      </div>
-    </section>
-
-    <nav class="tabs" aria-label="Abas do sistema">
-      <button class="tab active" data-tab="orders" onclick="showAdminTab('orders')">Pedidos</button>
-      <button class="tab" data-tab="manual" onclick="showAdminTab('manual')">Registrar venda</button>
-      <button class="tab" data-tab="products" onclick="showAdminTab('products')">Produtos</button>
-      <button class="tab" data-tab="stock" onclick="showAdminTab('stock')">Estoque</button>
-      <button class="tab" data-tab="dashboard" onclick="showAdminTab('dashboard')">Dashboard</button>
+    <nav class="nav-list" aria-label="Secoes">
+      <button class="nav-item active" data-tab="pedidos" onclick="showAdminTab('pedidos')"><span class="nav-icon">☰</span>Pedidos<span class="nav-badge hidden" id="nav-badge">0</span></button>
+      <button class="nav-item" data-tab="cozinha" onclick="showAdminTab('cozinha')"><span class="nav-icon">▦</span>Cozinha (KDS)</button>
+      <button class="nav-item" data-tab="mesas" onclick="showAdminTab('mesas')"><span class="nav-icon">▢</span>Mesas (salao)</button>
+      <button class="nav-item" data-tab="produtos" onclick="showAdminTab('produtos')"><span class="nav-icon">◱</span>Produtos</button>
+      <button class="nav-item" data-tab="promos" onclick="showAdminTab('promos')"><span class="nav-icon">✦</span>Promocoes</button>
+      <button class="nav-item" data-tab="entrega" onclick="showAdminTab('entrega')"><span class="nav-icon">◈</span>Area de entrega</button>
+      <button class="nav-item" data-tab="estoque" onclick="showAdminTab('estoque')"><span class="nav-icon">▤</span>Estoque</button>
+      <button class="nav-item" data-tab="dashboard" onclick="showAdminTab('dashboard')"><span class="nav-icon">◔</span>Dashboard</button>
     </nav>
 
-    <section class="admin-tab" id="tab-orders">
-      <div class="admin-grid">
-        <section class="panel">
-          <div class="tab-guide">
-            <strong>Como usar esta aba</strong>
-            <p>Todo pedido novo cai em Novo. Arraste para Em preparo para imprimir cozinha e balcao. Arraste para Pronto quando estiver embalado. Arraste para Entregue quando o cliente recebeu; nesse momento a venda entra no dashboard e o estoque baixa.</p>
-          </div>
-          <div class="section-head">
-            <div>
-              <span class="eyebrow">Operacao</span>
-              <h1>Pedidos recebidos</h1>
-              <p>Arraste os cards entre as etapas ou use os botoes. Quando virar Entregue, entra no dashboard e baixa estoque.</p>
-            </div>
-            <button class="secondary" onclick="renderAdmin()">Atualizar</button>
-          </div>
-          <div class="kanban" id="orders-kanban"></div>
-        </section>
+    <div class="nav-foot">
+      <button class="secondary install-button hidden" id="install-app" onclick="installApp()">⇩ Instalar app</button>
+      <button class="secondary" onclick="openSupport()">◈ Suporte Nexo</button>
+      <a class="admin-link" href="telao.html" target="_blank" rel="noopener">▦ Telao do salao ↗</a>
+      <a class="secondary" href="index.html" target="_blank" rel="noopener">← App do cliente</a>
+      <div class="nav-credit">feito por <img src="images/nexo sem fundo.png" alt="Nexo Developer"></div>
+    </div>
+  </aside>
 
-        <aside class="panel side-panel">
-          <h2>Impressoras</h2>
-          <p class="setup-text">A Elgin i8 imprime pelo dialogo do navegador neste MVP. Para impressao silenciosa, entra um agente local no Windows.</p>
-          <div class="print-actions">
-            <button class="secondary" onclick="printTest('kitchen')">Teste cozinha</button>
-            <button class="secondary" onclick="printTest('counter')">Teste balcao</button>
-          </div>
-          <div class="metric-stack" id="today-mini"></div>
-        </aside>
+  <main class="admin-app">
+    <header class="page-head">
+      <div class="page-head-copy">
+        <h1 id="page-title">Fila de pedidos</h1>
+        <p id="page-sub"></p>
       </div>
+      <div class="mini-metrics" id="mini-metrics"></div>
+    </header>
+
+    <section class="admin-tab" id="tab-pedidos">
+      <div class="tab-guide">
+        <strong>Como usar esta aba</strong>
+        <p>Tudo que entra pelo cardapio, WhatsApp ou lancamento manual cai aqui. Aprovar imprime nas duas impressoras; arraste os cards entre as colunas, para frente ou para tras, para corrigir o status.</p>
+      </div>
+      <div class="tab-actions">
+        <button class="secondary" onclick="printTest('kitchen')">Teste cozinha</button>
+        <button class="secondary" onclick="printTest('counter')">Teste balcao</button>
+        <button class="primary" onclick="openManualSale()">+ Lancar pedido manual</button>
+      </div>
+      <div class="kanban" id="orders-kanban"></div>
+      <p class="tab-hint">Dica: arraste um card para qualquer coluna, para frente ou para tras, para corrigir o status.</p>
     </section>
 
-    <section class="admin-tab hidden" id="tab-manual">
-      <div class="admin-grid">
-        <section class="panel">
-          <div class="tab-guide">
-            <strong>Como usar esta aba</strong>
-            <p>Registre vendas que nao vieram do cardapio, como loja, iFood, 99Food, Rappi ou WhatsApp. Escolha o canal, adicione os produtos, confira o total e salve. A venda entra na fila para controle e pode ser entregue depois.</p>
-          </div>
-          <div class="section-head">
-            <div>
-              <span class="eyebrow">Venda externa</span>
-              <h1>Registrar venda</h1>
-              <p>Use para pedidos de loja, iFood, 99Food, Rappi ou venda manual do caixa.</p>
-            </div>
-          </div>
-          <div class="manual-grid">
-            <div class="manual-products">
-              <input id="manual-search" type="search" placeholder="Buscar produto..." oninput="renderManualProducts()">
-              <div class="manual-product-list" id="manual-products"></div>
-            </div>
-            <div class="manual-sale-card">
-              <label>Canal da venda
-                <select id="manual-channel">
-                  <option value="loja">Loja</option>
-                  <option value="ifood">iFood</option>
-                  <option value="99food">99Food</option>
-                  <option value="rappi">Rappi</option>
-                  <option value="whatsapp">WhatsApp</option>
-                </select>
-              </label>
-              <label>Tipo do pedido
-                <select id="manual-fulfillment">
-                  <option value="retirada">Retirada</option>
-                  <option value="entrega">Entrega</option>
-                  <option value="mesa">Mesa</option>
-                </select>
-              </label>
-              <label>Cliente
-                <input id="manual-customer" placeholder="Cliente ou plataforma">
-              </label>
-              <label>Local
-                <input id="manual-place" placeholder="Balcao, mesa ou endereco">
-              </label>
-              <label>Pagamento
-                <select id="manual-payment">
-                  <option>Pix</option>
-                  <option>Cartao</option>
-                  <option>Dinheiro</option>
-                  <option>Online</option>
-                </select>
-              </label>
-              <label>Observacao
-                <textarea id="manual-note" rows="3" placeholder="Detalhes do pedido externo"></textarea>
-              </label>
-              <div class="cart-items" id="manual-cart"></div>
-              <div class="totals">
-                <span>Total</span>
-                <strong>R$ <span id="manual-total">0,00</span></strong>
-              </div>
-              <button class="primary wide" onclick="saveManualSale()">Salvar venda</button>
-              <button class="secondary wide" onclick="clearManualCart()">Limpar venda</button>
-            </div>
-          </div>
-        </section>
+    <section class="admin-tab hidden" id="tab-cozinha">
+      <div class="tab-guide">
+        <strong>Como usar esta aba</strong>
+        <p>Tela para o tablet da cozinha: fonte grande, legivel a distancia, unifica entrega e retirada. Toque no pedido para mover de Preparando para Pronto.</p>
       </div>
+      <div class="kds-board" id="kds-board"></div>
     </section>
 
-    <section class="admin-tab hidden" id="tab-products">
-      <section class="panel">
-        <div class="tab-guide">
-          <strong>Como usar esta aba</strong>
-          <p>Cadastre e edite o cardapio que o cliente ve no QR code. As fotos dos destaques no topo saem automaticamente dos produtos cadastrados com foto, principalmente Pizza Baixo K, Burguer Duplo K e drinks. Produto ativo aparece enquanto tiver estoque.</p>
+    <section class="admin-tab hidden" id="tab-mesas">
+      <div class="tab-guide">
+        <strong>Como usar esta aba</strong>
+        <p>Comanda por mesa com QR code: o atendente abre a mesa para liberar os pedidos, acompanha o parcial e o tempo, e fecha a conta imprimindo a nota no balcao.</p>
+      </div>
+      <div class="tables-bar">
+        <strong>Mesas no salao</strong>
+        <div class="counter">
+          <button onclick="removeTable()" aria-label="Remover mesa">−</button>
+          <span id="table-count">0</span>
+          <button onclick="addTable()" aria-label="Adicionar mesa">+</button>
         </div>
-        <div class="section-head">
-          <div>
-            <span class="eyebrow">Catalogo</span>
-            <h1>Produtos do cardapio</h1>
-            <p>Cadastre produtos, ajuste preco, categoria, foto e pause itens esgotados.</p>
+        <span class="tables-note">Cada mesa tem um QR code exclusivo. Toque em QR no card para ver e imprimir.</span>
+      </div>
+      <div class="tables-grid" id="tables-grid"></div>
+      <p class="tab-hint">Seguranca da comanda: o QR code da mesa so aceita pedidos enquanto a mesa estiver aberta pelo atendente. Fechou a conta, a sessao expira e quem fotografou o QR nao consegue pedir de fora.</p>
+    </section>
+
+    <section class="admin-tab hidden" id="tab-produtos">
+      <div class="tab-guide">
+        <strong>Como usar esta aba</strong>
+        <p>Cadastre e edite o cardapio que o cliente ve no QR code. As fotos dos destaques no topo saem automaticamente dos produtos cadastrados com foto, principalmente Pizza Baixo K, Burguer Duplo K e drinks. Pausar ou esgotar tira o item do ar na hora, sem apagar o cadastro.</p>
+      </div>
+      <div class="products-layout">
+        <div class="data-table" id="product-table">
+          <div class="data-head product-row">
+            <span></span><span>Produto</span><span>Categoria</span><span>Preco</span><span>Estoque</span><span>Status</span><span class="right">Acoes</span>
           </div>
+          <div id="product-admin-list"></div>
         </div>
-        <form class="product-form" onsubmit="saveProductForm(event)">
+
+        <form class="panel-form" onsubmit="saveProductForm(event)">
+          <h2 id="product-form-title">Novo produto</h2>
           <input id="product-id" type="hidden">
-          <label>Nome <input id="product-name" required placeholder="Ex: Pizza Baixo K"></label>
-          <label>Categoria
-            <select id="product-category">
-              <option value="pizzas">Pizzas</option>
-              <option value="burgues">Burgues</option>
-              <option value="massas">Massas</option>
-              <option value="drinks">Drinks</option>
-              <option value="porcoes">Porcoes</option>
-            </select>
-          </label>
-          <label>Preco <input id="product-price" type="number" step="0.01" min="0" required></label>
-          <label>Estoque <input id="product-stock" type="number" step="1" min="0" required></label>
-          <label class="photo-field">Foto do produto
-            <input id="product-image" placeholder="URL ou caminho da imagem" oninput="updateProductPhotoPreview(this.value)">
-            <input id="product-photo-file" type="file" accept="image/*" capture="environment" onchange="handleProductPhoto(event)">
-            <span>Escolha uma foto do PC/celular ou tire na hora pela camera.</span>
-          </label>
-          <div class="product-photo-preview">
-            <img class="hidden" id="product-photo-preview" src="" alt="Preview da foto">
-            <span class="photo-empty">Sem foto cadastrada</span>
+          <input id="product-name" required placeholder="Nome do produto">
+          <input id="product-description" required placeholder="Descricao curta">
+          <div class="field-row">
+            <input id="product-price" type="number" step="0.01" min="0" required placeholder="Preco (R$)">
+            <input id="product-stock" type="number" step="1" min="0" required placeholder="Estoque">
           </div>
-          <label class="wide-field">Descricao <input id="product-description" required placeholder="Descricao curta do item"></label>
-          <div class="form-actions">
-            <label class="check-field"><input id="product-active" type="checkbox" checked> Ativo no cardapio</label>
-            <button class="primary" type="submit">Salvar produto</button>
-            <button class="secondary" type="button" onclick="resetProductForm()">Novo</button>
+          <select id="product-category">
+            <option value="pizzas">Pizzas</option>
+            <option value="burgues">Burgues</option>
+            <option value="massas">Massas</option>
+            <option value="drinks">Drinks</option>
+            <option value="porcoes">Porcoes</option>
+          </select>
+          <div class="photo-block">
+            <span class="field-label">Foto do produto</span>
+            <div class="photo-presets" id="photo-presets"></div>
+            <div class="photo-upload">
+              <button class="secondary" type="button" onclick="document.getElementById('product-photo-file').click()">📷 Enviar foto do PC</button>
+              <img class="hidden" id="product-photo-preview" src="" alt="Preview da foto">
+              <span class="photo-empty">Sem foto cadastrada</span>
+            </div>
+            <input id="product-image" type="hidden">
+            <input id="product-photo-file" type="file" accept="image/*" capture="environment" class="hidden" onchange="handleProductPhoto(event)">
+          </div>
+          <label class="check-field"><input id="product-active" type="checkbox" checked> Ativo no cardapio</label>
+          <div class="field-row">
+            <button class="primary wide" type="submit" id="product-save-label">Cadastrar produto</button>
+            <button class="secondary" type="button" onclick="resetProductForm()">Limpar</button>
           </div>
         </form>
-        <div class="product-admin-list" id="product-admin-list"></div>
-      </section>
+      </div>
     </section>
 
-    <section class="admin-tab hidden" id="tab-stock">
-      <section class="panel">
-        <div class="tab-guide">
-          <strong>Como usar esta aba</strong>
-          <p>Acompanhe quantas unidades existem de cada item, principalmente refrigerantes, drinks e produtos prontos. Use + e - para ajustar rapido. Quando um pedido vira Entregue, o sistema baixa automaticamente o estoque dos itens vendidos.</p>
-        </div>
-        <div class="section-head">
-          <div>
-            <span class="eyebrow">Controle rapido</span>
-            <h1>Estoque</h1>
-            <p>Controle refrigerante, drinks e itens principais. Pedido entregue baixa automaticamente.</p>
+    <section class="admin-tab hidden" id="tab-promos">
+      <div class="tab-guide">
+        <strong>Como usar esta aba</strong>
+        <p>Preco promocional com validade, cupons com valor ou percentual, e dicas automaticas geradas a partir das vendas e do estoque.</p>
+      </div>
+      <div class="promo-tips" id="promo-tips"></div>
+      <div class="promo-layout">
+        <section class="panel">
+          <h2>Promocoes ativas</h2>
+          <div class="promo-list" id="promo-list"></div>
+          <div class="panel-divider">
+            <strong class="field-label gold">Nova promocao</strong>
+            <select id="promo-product"></select>
+            <div class="field-row">
+              <input id="promo-price" placeholder="Preco promocional (R$)">
+              <input id="promo-until" placeholder="Valida ate (ex: 10/08)">
+            </div>
+            <p class="form-error hidden" id="promo-error"></p>
+            <button class="primary wide" onclick="savePromo()">Ativar promocao</button>
           </div>
-        </div>
-        <div class="stock-grid" id="stock-grid"></div>
-      </section>
+        </section>
+
+        <section class="panel">
+          <h2>Cupons</h2>
+          <div class="coupon-list" id="coupon-list"></div>
+          <div class="panel-divider">
+            <strong class="field-label gold">Novo cupom</strong>
+            <div class="field-row">
+              <input id="coupon-code" class="code-input" placeholder="CODIGO (ex: BAIXO10)">
+              <button class="kind-btn active" type="button" id="coupon-kind-pct" onclick="setCouponKind('pct')">%</button>
+              <button class="kind-btn" type="button" id="coupon-kind-val" onclick="setCouponKind('val')">R$</button>
+            </div>
+            <div class="field-row">
+              <input id="coupon-amount" placeholder="Desconto (%)">
+              <input id="coupon-min" placeholder="Pedido minimo (R$)">
+              <input id="coupon-until" placeholder="Validade">
+            </div>
+            <button class="chip-toggle" type="button" id="coupon-once" onclick="toggleCouponOnce()">Uso unico por cliente</button>
+            <p class="form-error hidden" id="coupon-error"></p>
+            <button class="primary wide" onclick="saveCoupon()">Criar cupom</button>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="admin-tab hidden" id="tab-entrega">
+      <div class="tab-guide">
+        <strong>Como usar esta aba</strong>
+        <p>Marque onde fica a loja e crie faixas de raio. A distancia e medida em linha reta a partir da loja, e o cliente paga a taxa da primeira faixa que alcanca. Endereco alem da ultima faixa e recusado no carrinho.</p>
+      </div>
+      <div id="entrega-painel"></div>
+    </section>
+
+    <section class="admin-tab hidden" id="tab-estoque">
+      <div class="tab-guide">
+        <strong>Como usar esta aba</strong>
+        <p>Contador simples por produto: ajuste manual na entrada de mercadoria. Quando um item zera, ele sai do cardapio automaticamente. Pedido entregue baixa o estoque sozinho.</p>
+      </div>
+      <div class="stock-grid" id="stock-grid"></div>
     </section>
 
     <section class="admin-tab hidden" id="tab-dashboard">
-      <section class="panel">
-        <div class="tab-guide">
-          <strong>Como usar esta aba</strong>
-          <p>Veja o resultado real do caixa. So aparecem pedidos marcados como Entregue. Aqui voce acompanha faturamento, ticket medio, canais de venda, produtos mais vendidos e ultimos pedidos entregues.</p>
+      <div class="tab-guide">
+        <strong>Como usar esta aba</strong>
+        <p>Veja o resultado real do caixa. So pedidos marcados como Entregue entram no faturamento. Use os filtros de periodo, status, canal e pagamento para recortar o historico, e exporte tudo em planilha quando precisar fechar o mes.</p>
+      </div>
+      <div class="filter-bar">
+        <div class="period-group" id="period-group">
+          <button class="period-btn active" data-period="hoje" onclick="setDashPeriod('hoje')">Hoje</button>
+          <button class="period-btn" data-period="7d" onclick="setDashPeriod('7d')">7 dias</button>
+          <button class="period-btn" data-period="tudo" onclick="setDashPeriod('tudo')">Tudo</button>
         </div>
-        <div class="section-head">
-          <div>
-            <span class="eyebrow">Fechamento</span>
-            <h1>Dashboard</h1>
-            <p>Somente pedidos entregues entram aqui.</p>
-          </div>
-          <button class="primary" onclick="exportDashboardExcel()">Exportar Excel</button>
+        <select id="filter-status" onchange="renderDashboard()">
+          <option value="todos">Status: todos</option>
+          <option value="abertos">Em aberto</option>
+          <option value="entregue">Entregues</option>
+          <option value="cancelado">Recusados</option>
+        </select>
+        <select id="filter-channel" onchange="renderDashboard()"></select>
+        <select id="filter-payment" onchange="renderDashboard()">
+          <option value="todos">Pagamento: todos</option>
+          <option>Pix</option>
+          <option>Cartao</option>
+          <option>Dinheiro</option>
+          <option>Online</option>
+        </select>
+        <button class="primary export-btn" onclick="exportDashboardExcel()">⇩ Exportar planilha</button>
+      </div>
+
+      <div class="dashboard-grid" id="dashboard-metrics"></div>
+
+      <div class="dashboard-columns">
+        <div class="chart-card">
+          <h2>Faturamento por canal</h2>
+          <div id="channel-chart"></div>
+          <h2 class="chart-subhead">Formas de pagamento</h2>
+          <div id="payment-chart"></div>
         </div>
-        <div class="dashboard-grid" id="dashboard-metrics"></div>
-        <div class="dashboard-columns">
-          <div class="chart-card">
-            <h2>Faturamento por canal</h2>
-            <div id="channel-chart"></div>
-          </div>
-          <div class="chart-card">
-            <h2>Mais vendidos</h2>
-            <div id="best-items"></div>
-          </div>
-          <div class="chart-card">
-            <h2>Ultimos pedidos entregues</h2>
-            <div id="completed-sales"></div>
-          </div>
-          <div class="chart-card">
-            <h2>Vendas por horario</h2>
-            <div id="hour-chart"></div>
-          </div>
-          <div class="chart-card">
-            <h2>Faturamento por categoria</h2>
-            <div id="category-chart"></div>
-          </div>
-          <div class="chart-card">
-            <h2>Estoque critico</h2>
-            <div id="stock-alert-chart"></div>
-          </div>
+        <div class="chart-card">
+          <h2>Movimento por hora</h2>
+          <div id="hour-chart"></div>
         </div>
-        <div class="chart-card all-orders-card">
-          <h2>Todos os pedidos</h2>
+        <div class="chart-card">
+          <h2>Mais vendidos</h2>
+          <div id="best-items"></div>
+        </div>
+        <div class="chart-card">
+          <h2>Alerta de estoque</h2>
+          <div id="stock-alert-chart"></div>
+        </div>
+      </div>
+
+      <div class="chart-card all-orders-card">
+        <h2>Todos os pedidos <span class="count-note" id="orders-count"></span></h2>
+        <div class="data-table">
+          <div class="data-head order-row">
+            <span>No</span><span>Cliente</span><span>Canal</span><span>Tipo</span><span>Pagamento</span><span>Status</span><span>Hora</span><span class="right">Total</span>
+          </div>
           <div id="all-orders-dashboard"></div>
         </div>
-      </section>
+      </div>
     </section>
   </main>
+
+  <div class="modal hidden" id="manual-modal" role="dialog" aria-modal="true" aria-labelledby="manual-title" onclick="closeManualSale(event)">
+    <div class="modal-card" onclick="event.stopPropagation()">
+      <div>
+        <h2 id="manual-title">Lancar pedido manual</h2>
+        <p>Balcao ou venda de outra plataforma (iFood, WhatsApp...). Consolida o faturamento no dashboard.</p>
+      </div>
+      <div class="chip-row" id="manual-channels"></div>
+      <input id="manual-customer" placeholder="Nome do cliente (opcional)">
+      <div class="chip-row" id="manual-payments"></div>
+      <input id="manual-search" type="search" placeholder="Buscar produto para adicionar..." oninput="renderManualProducts()">
+      <div class="manual-product-list" id="manual-products"></div>
+      <div class="manual-cart" id="manual-cart"></div>
+      <p class="form-error hidden" id="manual-error"></p>
+      <p class="modal-hint" id="manual-hint"></p>
+      <div class="field-row">
+        <button class="primary wide" onclick="saveManualSale()">Registrar pedido</button>
+        <button class="secondary" onclick="closeManualSale()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="qr-modal" role="dialog" aria-modal="true" aria-labelledby="qr-title" onclick="closeTableQr(event)">
+    <div class="modal-card qr-card" onclick="event.stopPropagation()">
+      <img class="qr-logo" src="images/baixok-logo-v2.png" alt="Baixo K">
+      <h2 id="qr-title">Mesa</h2>
+      <div class="qr-frame"><img id="qr-image" src="" alt="QR code da mesa"></div>
+      <p class="qr-url" id="qr-url"></p>
+      <p class="modal-hint">Escaneie para testar: abre o cardapio ja identificado nesta mesa. Imprima, plastifique e fixe na mesa.</p>
+      <div class="field-row">
+        <a class="primary" id="qr-print" href="#" target="_blank" rel="noopener">Abrir para imprimir ↗</a>
+        <button class="secondary" onclick="closeTableQr()">Fechar</button>
+      </div>
+    </div>
+  </div>
 
   <iframe class="print-frame" id="print-frame" title="Impressao"></iframe>
   <div class="support-modal hidden" id="support-modal" role="dialog" aria-modal="true" aria-labelledby="support-title">
@@ -318,9 +360,6 @@
       </div>
     </div>
   </div>
-  <footer class="nexo-footer">
-    Instagram <a href="https://www.instagram.com/baixok_/" target="_blank" rel="noopener">@baixok_</a> · Desenvolvido pela <a href="https://portfolio-nexo.netlify.app/" target="_blank" rel="noopener">Nexo Developer</a>
-  </footer>
   <div class="toast" id="toast"></div>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="app.js"></script>

@@ -22,9 +22,71 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700;800&family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Busca de endereco oficial da Mapbox. Se a CDN nao carregar, o app cai
+       sozinho na busca pelo proprio servidor - ver montarBuscaEndereco() -->
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css">
+  <script defer src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body data-page="menu">
+  <header class="table-bar hidden" id="table-bar">
+    <div>
+      <strong id="table-bar-title">Mesa</strong>
+      <span id="table-bar-status">Comanda aberta</span>
+    </div>
+    <img src="images/baixok-logo-v2.png" alt="Baixo K">
+  </header>
+
+  <nav class="table-nav hidden" id="table-nav" aria-label="Navegacao da mesa">
+    <button class="table-tab active" data-view="inicio" onclick="showTableView('inicio')">Inicio</button>
+    <button class="table-tab" data-view="comanda" onclick="showTableView('comanda')">Comanda <span class="table-tab-count hidden" id="comanda-count">0</span></button>
+  </nav>
+
+  <section class="table-blocked hidden" id="table-blocked">
+    <span class="blocked-icon">▢</span>
+    <h1 id="blocked-title">Comanda fechada</h1>
+    <p id="blocked-text">Chame o atendente para abrir a mesa e liberar os pedidos por aqui.</p>
+    <a class="secondary" href="index.html">Ver o cardapio mesmo assim</a>
+  </section>
+
+  <section class="table-comanda hidden" id="table-comanda">
+    <div class="comanda-empty hidden" id="comanda-empty">
+      <span class="comanda-icon">🍽</span>
+      <strong>Voce ainda nao fez nenhum pedido</strong>
+      <p>Tudo que voce pedir por aqui vai somando nesta comanda ate o fechamento da conta.</p>
+      <button class="primary wide" onclick="showTableView('inicio')">Comecar a pedir</button>
+    </div>
+    <div class="comanda-body hidden" id="comanda-body">
+      <div class="section-head">
+        <div>
+          <span class="eyebrow">Sua comanda</span>
+          <h2 id="comanda-title">Mesa</h2>
+          <p>Itens ja enviados para a cozinha. A conta e paga no balcao no fim.</p>
+        </div>
+      </div>
+      <div class="comanda-items" id="comanda-items"></div>
+      <div class="comanda-totals" id="comanda-totals"></div>
+      <button class="primary wide" onclick="showTableView('inicio')">Adicionar mais itens</button>
+      <button class="secondary wide" onclick="openPaymentInfo()">Ver formas de pagamento</button>
+    </div>
+  </section>
+
+  <div class="modal hidden" id="payment-modal" role="dialog" aria-modal="true" aria-labelledby="payment-title" onclick="closePaymentInfo(event)">
+    <div class="modal-card" onclick="event.stopPropagation()">
+      <div>
+        <h2 id="payment-title">Formas de pagamento</h2>
+        <p>A conta e fechada no balcao. Avise o atendente quando quiser encerrar a comanda.</p>
+      </div>
+      <div class="pay-options">
+        <div class="pay-option"><strong>Pix</strong><span>QR do estabelecimento no balcao</span></div>
+        <div class="pay-option"><strong>Cartao</strong><span>Credito ou debito na maquininha</span></div>
+        <div class="pay-option"><strong>Dinheiro</strong><span>Troco no balcao</span></div>
+      </div>
+      <p class="modal-hint">Sobre a conta e cobrada a taxa de servico de 10%, mostrada no total da comanda.</p>
+      <button class="secondary wide" onclick="closePaymentInfo()">Fechar</button>
+    </div>
+  </div>
+
   <header class="topbar menu-topbar">
     <div class="brand">
       <img src="images/baixok-logo-v2.png" alt="Baixo K">
@@ -34,8 +96,8 @@
       </div>
     </div>
     <div class="top-actions">
-      <a class="secondary" href="https://www.instagram.com/baixok_/" target="_blank" rel="noopener">Instagram</a>
-      <a class="admin-link" href="admin.html">Painel</a>
+      <a class="secondary" href="https://www.instagram.com/baixok_/" target="_blank" rel="noopener">◎ Instagram</a>
+      <a class="admin-link" href="admin.html">▦ Painel</a>
     </div>
   </header>
 
@@ -112,8 +174,11 @@
       </label>
       <label id="place-label" class="hidden">
         Local de entrega
-        <input id="customer-place" placeholder="Endereco completo">
+        <div class="geocoder" id="endereco-widget"></div>
+        <input id="customer-place" placeholder="Rua e numero" autocomplete="off" oninput="buscarEnderecoCliente(this.value)">
       </label>
+      <div class="sugestoes" id="endereco-sugestoes"></div>
+      <p class="entrega-aviso hidden" id="entrega-aviso"></p>
       <label>
         Pagamento
         <select id="payment-method">
@@ -127,11 +192,36 @@
         Observacao
         <textarea id="order-note" rows="3" placeholder="Sem cebola, ponto da carne, troco..."></textarea>
       </label>
-      <div class="totals">
-        <span>Total</span>
-        <strong>R$ <span id="cart-total">0,00</span></strong>
+      <div class="coupon-field" id="coupon-field">
+        <div class="coupon-input-row">
+          <input id="coupon-code-input" placeholder="Cupom de desconto" autocomplete="off">
+          <button class="secondary" type="button" onclick="applyCoupon()">Aplicar</button>
+        </div>
+        <p class="coupon-feedback hidden" id="coupon-feedback"></p>
+        <div class="coupon-applied hidden" id="coupon-applied">
+          <span><code id="coupon-applied-code"></code> <em id="coupon-applied-desc"></em></span>
+          <button type="button" onclick="removeCoupon()" aria-label="Remover cupom">×</button>
+        </div>
       </div>
-      <button class="primary wide" onclick="sendOrder()">Enviar pedido</button>
+      <div class="totals-block">
+        <div class="totals-line hidden" id="subtotal-line">
+          <span>Subtotal</span>
+          <span>R$ <span id="cart-subtotal">0,00</span></span>
+        </div>
+        <div class="totals-line hidden" id="delivery-line">
+          <span>Taxa de entrega</span>
+          <span>R$ <span id="cart-delivery">0,00</span></span>
+        </div>
+        <div class="totals-line discount hidden" id="discount-line">
+          <span>Desconto</span>
+          <span>- R$ <span id="cart-discount">0,00</span></span>
+        </div>
+        <div class="totals">
+          <span>Total</span>
+          <strong>R$ <span id="cart-total">0,00</span></strong>
+        </div>
+      </div>
+      <button class="primary wide" id="send-order" onclick="sendOrder()">Enviar pedido</button>
       <button class="secondary wide" onclick="clearCart()">Limpar</button>
     </aside>
   </main>
