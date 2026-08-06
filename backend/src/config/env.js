@@ -66,6 +66,12 @@ const schema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(10).optional(),
   SUPABASE_INSECURE_TLS: booleano.optional(),
 
+  /* Cadeia de conexao do Postgres do Supabase (db/postgres.js). E a mesma
+   * SUPABASE_DATABASE_URL que a extensao do Supabase ja publica no Netlify.
+   * Use o pooler, nao a conexao direta: cada instancia do backend abre um pool
+   * proprio e o limite de conexoes do projeto estoura rapido sem ele. */
+  SUPABASE_DATABASE_URL: z.string().url().optional(),
+
   /* Tetos por IP. Configuraveis porque a loja com wifi unico faz dezenas de
    * clientes chegarem com o mesmo IP — o padrao serve para a maioria, mas quem
    * usa NAT pesado precisa afrouxar sem editar codigo. */

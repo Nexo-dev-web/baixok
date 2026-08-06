@@ -18,9 +18,10 @@
   publish = "frontend/dist"
 
 [build.environment]
-  # package.json/engines pede >= 20.11. Sem fixar, o Netlify escolhe a versao
-  # dele e o build passa a depender de quando foi publicado.
-  NODE_VERSION = "20"
+  # Acompanha o engines da raiz (>= 22.5, exigido pelo node:sqlite do backend).
+  # Sem fixar, o Netlify escolhe a versao dele e o build passa a depender de
+  # quando foi publicado.
+  NODE_VERSION = "22"
 
 # --------------------------------------------------------------------- API ---
 # O front chama tudo em /api (services/http.js). Em producao essas chamadas

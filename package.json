@@ -7,8 +7,9 @@
     "backend",
     "frontend"
   ],
+  "comentario-engines": "node:sqlite (DatabaseSync, usado em backend/src/db/connection.js) so existe a partir do 22.5. Com o 20 declarado antes, um host que respeita este campo escolhia o 20 e o backend morria na subida com 'Cannot find module node:sqlite'.",
   "engines": {
-    "node": ">=20.11"
+    "node": ">=22.5"
   },
   "scripts": {
     "dev": "concurrently -n api,web -c cyan,magenta \"npm:dev:api\" \"npm:dev:web\"",
