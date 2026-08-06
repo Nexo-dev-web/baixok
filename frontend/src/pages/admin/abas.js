@@ -1,9 +1,21 @@
 /* Definicao das abas do painel.
  *
- * O campo `papeis` decide o que cada pessoa enxerga. E defesa em profundidade,
- * nao a defesa em si: esconder o botao evita erro e confusao, mas quem chamar a
- * API direto continua barrado pelo `exigirPapel` da rota. As duas listas
- * precisam concordar — backend/src/routes/painel.routes.js e a que vale. */
+ * `abasVer` e `abasEditar` permitem ajustar o que cada usuario enxerga sem
+ * depender apenas do papel. O backend continua validando tudo na API; aqui a
+ * regra serve para esconder o que nao deve aparecer e evitar clique indevido.
+ */
+
+const PAPEL_PADRAO_VER = Object.freeze({
+  admin: ["pedidos", "mesas", "produtos", "promos", "entrega", "estoque", "dashboard", "plano", "usuarios"],
+  caixa: ["pedidos", "mesas", "estoque"],
+  cozinha: ["pedidos"]
+});
+
+const PAPEL_PADRAO_EDITAR = Object.freeze({
+  admin: ["pedidos", "mesas", "produtos", "promos", "entrega", "estoque", "dashboard", "plano", "usuarios"],
+  caixa: ["pedidos", "mesas", "estoque"],
+  cozinha: []
+});
 
 export const ABAS = Object.freeze({
   pedidos: {
@@ -13,17 +25,10 @@ export const ABAS = Object.freeze({
     rotulo: "Pedidos",
     papeis: ["admin", "caixa", "cozinha"]
   },
-  cozinha: {
-    titulo: "Cozinha (KDS)",
-    subtitulo: "Tela do tablet da cozinha: toque para avancar o preparo.",
-    icone: "▦",
-    rotulo: "Cozinha (KDS)",
-    papeis: ["admin", "caixa", "cozinha"]
-  },
   mesas: {
     titulo: "Mesas do salao",
     subtitulo: "Comanda por mesa com QR code, parcial e fechamento de conta.",
-    icone: "▢",
+    icone: "▪",
     rotulo: "Mesas (salao)",
     papeis: ["admin", "caixa"]
   },
@@ -60,13 +65,20 @@ export const ABAS = Object.freeze({
     subtitulo: "Faturamento, movimento por hora e mais vendidos.",
     icone: "◔",
     rotulo: "Dashboard",
+    papeis: ["admin", "caixa"]
+  },
+  plano: {
+    titulo: "Plano do sistema",
+    subtitulo: "Valor da mensalidade, vencimento e dias restantes.",
+    icone: "PL",
+    rotulo: "Plano do sistema",
     papeis: ["admin"]
   },
-  equipe: {
-    titulo: "Equipe e auditoria",
-    subtitulo: "Quem tem acesso, com qual papel, e o registro do que foi feito.",
+  usuarios: {
+    titulo: "Usuarios e auditoria",
+    subtitulo: "Quem tem acesso, o que pode ver/editar, e o registro do que foi feito.",
     icone: "◍",
-    rotulo: "Equipe",
+    rotulo: "Usuarios",
     papeis: ["admin"]
   }
 });
@@ -74,11 +86,23 @@ export const ABAS = Object.freeze({
 export const abasDoPapel = papel =>
   Object.entries(ABAS).filter(([, aba]) => aba.papeis.includes(papel));
 
-/* Primeira aba que o papel alcanca. A cozinha entra direto no KDS, que e a
- * tela onde ela trabalha. */
-export function abaInicial(papel) {
-  if (papel === "cozinha") return "cozinha";
-  return abasDoPapel(papel)[0]?.[0] || "pedidos";
+function listaPermitida(usuario, tipo) {
+  const chave = tipo === "editar" ? "abasEditar" : "abasVer";
+  const lista = usuario?.[chave];
+  if (Array.isArray(lista) && lista.length) return lista;
+  return tipo === "editar"
+    ? PAPEL_PADRAO_EDITAR[usuario?.papel] || []
+    : PAPEL_PADRAO_VER[usuario?.papel] || [];
 }
 
-export const podeVer = (aba, papel) => Boolean(ABAS[aba]?.papeis.includes(papel));
+export function abaInicial(usuario) {
+  return listaPermitida(usuario, "ver")[0] || "pedidos";
+}
+
+export function podeVer(aba, usuario) {
+  return listaPermitida(usuario, "ver").includes(aba);
+}
+
+export function podeEditar(aba, usuario) {
+  return listaPermitida(usuario, "editar").includes(aba);
+}

@@ -28,6 +28,9 @@ const PRODUTOS_EXEMPLO = [
 ];
 
 const MESAS_INICIAIS = 8;
+const PERMISSOES_ADMIN = ["pedidos", "mesas", "produtos", "promos", "entrega", "estoque", "dashboard", "plano", "usuarios"];
+const PERMISSOES_BALCAO = ["pedidos", "mesas", "estoque"];
+const PERMISSOES_COZINHA = ["pedidos"];
 
 export async function semear({ silencioso = false } = {}) {
   abrirBanco();
@@ -38,13 +41,18 @@ export async function semear({ silencioso = false } = {}) {
 
   /* Administrador. A senha vem do ambiente ou e sorteada — nunca ha senha
    * padrao cravada no codigo, que e como instalacoes ficam abertas por anos. */
-  if (usuariosRepo.contarAdminsAtivos() === 0) {
+  const usuarioAdmin = env.ADMIN_BOOTSTRAP_USER === "admin" ? "baixok@food.com" : env.ADMIN_BOOTSTRAP_USER;
+
+  const adminExistente = usuariosRepo.buscarPorUsuario(usuarioAdmin);
+  if (!adminExistente) {
     const senha = env.ADMIN_BOOTSTRAP_PASSWORD || randomBytes(12).toString("base64url");
     const usuario = usuariosRepo.criar({
-      usuario: env.ADMIN_BOOTSTRAP_USER,
-      nome: "Administrador",
+      usuario: usuarioAdmin,
+      nome: "Admin Baixo K",
       senhaHash: await gerarHashSenha(senha),
-      papel: "admin"
+      papel: "admin",
+      abasVer: PERMISSOES_ADMIN,
+      abasEditar: PERMISSOES_ADMIN
     });
     resultado.admin = usuario.usuario;
     if (!env.ADMIN_BOOTSTRAP_PASSWORD) resultado.senhaGerada = senha;
@@ -56,7 +64,18 @@ export async function semear({ silencioso = false } = {}) {
     avisar("  Anote agora e troque no primeiro acesso.");
     avisar("=================================================\n");
   } else {
-    avisar("Ja existe administrador. Nenhum usuario criado.");
+    usuariosRepo.atualizar(adminExistente.id, {
+      nome: "Admin Baixo K",
+      papel: "admin",
+      ativo: true,
+      abasVer: PERMISSOES_ADMIN,
+      abasEditar: PERMISSOES_ADMIN
+    });
+    if (env.ADMIN_BOOTSTRAP_PASSWORD) {
+      usuariosRepo.trocarSenha(adminExistente.id, await gerarHashSenha(env.ADMIN_BOOTSTRAP_PASSWORD));
+    }
+    resultado.admin = adminExistente.usuario;
+    avisar("Administrador padrao atualizado.");
   }
 
   emTransacao(() => {
@@ -74,6 +93,24 @@ export async function semear({ silencioso = false } = {}) {
     }
     ajustesRepo.gravarVarios({ nome_loja: "Baixo K", taxa_servico_mesa: "0.1" });
   });
+
+  if (!usuariosRepo.buscarPorUsuario("balcao@baixok.com")) {
+    const senhaBalcao = env.BALCAO_BOOTSTRAP_PASSWORD || randomBytes(12).toString("base64url");
+    usuariosRepo.criar({
+      usuario: "balcao@baixok.com",
+      nome: "Balcao Baixo K",
+      senhaHash: await gerarHashSenha(senhaBalcao),
+      papel: "caixa",
+      abasVer: PERMISSOES_BALCAO,
+      abasEditar: ["pedidos", "mesas"]
+    });
+    avisar("Usuario de balcao criado: balcao@baixok.com");
+    if (!env.BALCAO_BOOTSTRAP_PASSWORD) avisar(`Senha inicial do balcao: ${senhaBalcao}`);
+  } else if (env.BALCAO_BOOTSTRAP_PASSWORD) {
+    const balcao = usuariosRepo.buscarPorUsuario("balcao@baixok.com");
+    usuariosRepo.trocarSenha(balcao.id, await gerarHashSenha(env.BALCAO_BOOTSTRAP_PASSWORD));
+    avisar("Senha do balcao atualizada.");
+  }
 
   if (resultado.produtos) avisar(`Cardapio de exemplo: ${resultado.produtos} produtos.`);
   if (resultado.mesas) avisar(`Mesas criadas: ${resultado.mesas}.`);

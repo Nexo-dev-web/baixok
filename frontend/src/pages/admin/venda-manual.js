@@ -18,6 +18,11 @@ let aoConcluir = null;
 
 const subtotal = () => rascunho.itens.reduce((soma, item) => soma + item.price * item.qty, 0);
 
+function normalizarTroco(valor) {
+  const numero = Number(String(valor ?? "").replace(/\./g, "").replace(",", ".").trim());
+  return Number.isFinite(numero) && numero > 0 ? numero : null;
+}
+
 function definirErro(mensagem) {
   const alvo = $("#manual-error");
   alvo.textContent = mensagem || "";
@@ -48,6 +53,10 @@ function desenharChips() {
       dataset: { acao: "pagamento", pagamento: rotulo }
     }, rotulo)
   ));
+
+  const mostraTroco = rascunho.pagamento === "Dinheiro" && rascunho.mesa === null;
+  mostrar($("#manual-change-field"), mostraTroco);
+  if (!mostraTroco && $("#manual-change-for")) $("#manual-change-for").value = "";
 }
 
 function desenharProdutos() {
@@ -106,6 +115,7 @@ export function abrirVendaManual(mesa = null, callback = null) {
 
   $("#manual-title").textContent = mesa ? `Lancar pedido na mesa ${mesa}` : "Lancar pedido manual";
   $("#manual-customer").value = "";
+  if ($("#manual-change-for")) $("#manual-change-for").value = "";
   $("#manual-search").value = "";
   definirErro("");
   redesenhar();
@@ -122,6 +132,10 @@ async function registrar() {
   definirErro("");
 
   const nome = $("#manual-customer").value.trim();
+  const trocoPara = normalizarTroco($("#manual-change-for")?.value);
+  if (rascunho.pagamento === "Dinheiro" && rascunho.mesa === null && !trocoPara) {
+    return definirErro("Informe troco para quanto.");
+  }
   const corpo = {
     items: rascunho.itens.map(item => ({ id: item.id, qty: item.qty })),
     customer: nome || (rascunho.mesa ? `Mesa ${rascunho.mesa}` : CANAIS_ROTULO[rascunho.canal]),
@@ -129,13 +143,20 @@ async function registrar() {
     place: rascunho.mesa ? `Mesa ${rascunho.mesa} - salao` : rascunho.canal === "loja" ? "Retirada no balcao" : "Venda externa",
     note: "",
     payment: rascunho.pagamento,
+    trocoPara: rascunho.pagamento === "Dinheiro" && rascunho.mesa === null ? trocoPara : null,
     channel: rascunho.canal,
     fulfillment: rascunho.mesa ? "mesa" : "retirada",
     tableNumber: rascunho.mesa
   };
 
   try {
-    await apiPedidos.criarManual(corpo);
+    const controle = new AbortController();
+    const tempo = setTimeout(() => controle.abort(new Error("timeout")), 20000);
+    try {
+      await apiPedidos.criarManual(corpo, { sinal: controle.signal });
+    } finally {
+      clearTimeout(tempo);
+    }
     await carregar("pedidos", "produtos", "mesas");
     fecharVendaManual();
     toast(rascunho.mesa ? `Pedido lancado na mesa ${rascunho.mesa}.` : "Venda registrada na fila.");
@@ -162,6 +183,10 @@ export function ligarVendaManual() {
   delegar(modal, "click", "[data-acao='pagamento']", (_e, botao) => {
     rascunho.pagamento = botao.dataset.pagamento;
     desenharChips();
+  });
+
+  $("#manual-change-for")?.addEventListener("input", () => {
+    if (rascunho.pagamento === "Dinheiro") definirErro("");
   });
 
   delegar(modal, "click", "[data-acao='add-item']", (_e, botao) => {

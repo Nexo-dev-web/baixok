@@ -17,6 +17,7 @@ const paraApi = (linha, itens = []) => linha && ({
   place: linha.local,
   note: linha.observacao,
   payment: linha.pagamento,
+  trocoPara: linha.troco_para,
   tableNumber: linha.mesa_n,
   subtotal: linha.subtotal,
   discount: linha.desconto,
@@ -140,12 +141,12 @@ export const pedidosRepo = {
     db.prepare(`
       INSERT INTO pedidos (
         id, criado_em, status, canal, modalidade, cliente, telefone, local, observacao,
-        pagamento, mesa_n, subtotal, desconto, cupom_code, taxa_entrega, entrega_km,
+        pagamento, troco_para, mesa_n, subtotal, desconto, cupom_code, taxa_entrega, entrega_km,
         entrega_faixa, total, impresso, estoque_baixado, criado_por
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       pedido.id, pedido.createdAt, pedido.status, pedido.channel, pedido.fulfillment,
-      pedido.customer, pedido.phone, pedido.place, pedido.note, pedido.payment,
+      pedido.customer, pedido.phone, pedido.place, pedido.note, pedido.payment, pedido.trocoPara ?? null,
       pedido.tableNumber ?? null, pedido.subtotal, pedido.discount, pedido.coupon,
       pedido.deliveryFee, pedido.deliveryKm ?? null, pedido.deliveryZone ?? null,
       pedido.total, paraSqlite(pedido.printed), paraSqlite(pedido.stockDeducted),

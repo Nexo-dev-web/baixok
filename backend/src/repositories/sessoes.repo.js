@@ -23,7 +23,7 @@ export const sessoesRepo = {
   buscarValida(token) {
     return getDb().prepare(`
       SELECT s.token_hash, s.csrf_hash, s.expira_em,
-             u.id AS usuario_id, u.usuario, u.nome, u.papel
+             u.id AS usuario_id, u.usuario, u.nome, u.papel, u.abas_ver, u.abas_editar
         FROM sessoes s
         JOIN usuarios u ON u.id = s.usuario_id
        WHERE s.token_hash = ?

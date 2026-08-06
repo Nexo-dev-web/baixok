@@ -1,7 +1,7 @@
 /* Dashboard.
  *
  * Todos os numeros vem agregados do servidor. O painel antigo baixava a lista
- * inteira de pedidos — com nome, telefone e endereco de cada cliente — para
+ * inteira de pedidos - com nome, telefone e endereco de cada cliente - para
  * somar faturamento no navegador. Alem de pesado, colocava a base de clientes
  * dentro de um tablet que fica no balcao. */
 import { el, render, $, delegar } from "../../../utils/dom.js";
@@ -21,10 +21,22 @@ function metrica(rotulo, valor, nota, tom = "") {
   );
 }
 
-/* Barras proporcionais em CSS puro. O original ja fazia assim — sem biblioteca
+function estadoVazioGrafico(mensagem, detalhe) {
+  return el("div.chart-empty", {},
+    el("div.chart-empty-bars", {},
+      ...Array.from({ length: 7 }, (_v, indice) =>
+        el("i", { style: { height: `${30 + indice * 6}%`, animationDelay: `${indice * 70}ms` } })
+      )
+    ),
+    el("p", {}, mensagem),
+    detalhe ? el("span.small.faint", {}, detalhe) : null
+  );
+}
+
+/* Barras proporcionais em CSS puro. O original ja fazia assim - sem biblioteca
  * de grafico, o que para quatro barras continua sendo a escolha certa. */
-function barras(linhas, formatar) {
-  if (!linhas.length) return el("p.faint", {}, "Sem dados no periodo.");
+function barras(linhas, formatar, vazioMensagem = "Sem dados no periodo.", vazioDetalhe = "O grafico fica pronto para crescer quando entrarem pedidos.") {
+  if (!linhas.length) return estadoVazioGrafico(vazioMensagem, vazioDetalhe);
   const maior = Math.max(...linhas.map(linha => Number(linha.valor) || 0), 1);
 
   return el("div.chart-rows", {}, ...linhas.map(linha =>
@@ -60,22 +72,30 @@ export async function desenharDashboard() {
 
   render($("#channel-chart"), barras(
     porCanal.map(linha => ({ rotulo: CANAIS_ROTULO[linha.rotulo] || linha.rotulo || "-", valor: linha.faturamento })),
-    reais
+    reais,
+    "Nenhum canal movimentou neste periodo.",
+    "Quando houver vendas, cada canal ganha sua barra aqui."
   ));
 
   render($("#payment-chart"), barras(
     porPagamento.map(linha => ({ rotulo: linha.rotulo || "nao informado", valor: linha.faturamento })),
-    reais
+    reais,
+    "Sem pagamentos registrados.",
+    "A divisao por forma de pagamento vai aparecer neste bloco."
   ));
 
   render($("#hour-chart"), barras(
     porHora.map(linha => ({ rotulo: `${linha.hora}h`, valor: linha.pedidos })),
-    valor => `${valor} ped.`
+    valor => `${valor} ped.`,
+    "Sem movimento por hora.",
+    "Quando o caixa rodar, este grafico mostra os picos do dia."
   ));
 
   render($("#best-items"), barras(
     maisVendidos.map(linha => ({ rotulo: linha.rotulo, valor: linha.quantidade })),
-    valor => `${valor}x`
+    valor => `${valor}x`,
+    "Sem itens vendidos ainda.",
+    "Os produtos mais fortes do periodo entram aqui automaticamente."
   ));
 
   render($("#stock-alert-chart"), estoqueBaixo.length
@@ -83,7 +103,10 @@ export async function desenharDashboard() {
         estoqueBaixo.map(item => ({ rotulo: item.nome, valor: item.estoque })),
         valor => `${valor} un.`
       )
-    : el("p.faint", {}, "Nenhum item no minimo."));
+    : estadoVazioGrafico(
+        "Nenhum item no minimo.",
+        "Quando algo baixar, este bloco vira alerta visual."
+      ));
 }
 
 /* Exportacao em CSV com separador ponto-e-virgula e BOM: e o que o Excel em
@@ -104,7 +127,7 @@ function exportarPlanilha() {
         }).join(";"))
       ].join("\r\n");
 
-      const blob = new Blob([`﻿${csv}`], { type: "text/csv;charset=utf-8" });
+      const blob = new Blob([`ï»¿${csv}`], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;

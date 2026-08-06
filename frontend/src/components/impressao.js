@@ -95,6 +95,9 @@ function corpoDoRecibo(pedido, cozinha) {
     if (Number(pedido.deliveryFee || 0) > 0) {
       totais.append(el("div.line", {}, el("span", {}, "Taxa de entrega"), el("strong", {}, `R$ ${dinheiro(pedido.deliveryFee)}`)));
     }
+    if (String(pedido.payment || "").toLowerCase().includes("dinheiro") && Number(pedido.trocoPara || 0) > 0) {
+      totais.append(el("div.line", {}, el("span", {}, "Troco para"), el("strong", {}, `R$ ${dinheiro(pedido.trocoPara)}`)));
+    }
     totais.append(
       el("div.line", {}, el("span", {}, "Total"), el("strong", {}, `R$ ${dinheiro(pedido.total)}`)),
       el("div.line", {}, el("span", {}, "Pagamento"), el("strong", {}, pedido.payment || ""))

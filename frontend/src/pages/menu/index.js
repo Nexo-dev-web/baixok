@@ -76,6 +76,18 @@ function definirModalidade(modo) {
   redesenhar();
 }
 
+function normalizarTroco(valor) {
+  const numero = Number(String(valor ?? "").replace(/\./g, "").replace(",", ".").trim());
+  return Number.isFinite(numero) && numero > 0 ? numero : null;
+}
+
+function atualizarCampoTroco() {
+  const pagamento = $("#payment-method")?.value || "";
+  const mostrarCampo = pagamento === "Dinheiro" && !sessaoMesa.n;
+  mostrar($("#change-field"), mostrarCampo);
+  if (!mostrarCampo && $("#change-for")) $("#change-for").value = "";
+}
+
 function adicionarAoCarrinho(id) {
   const produto = estado.produtosPorId.get(id);
   if (!produto) return toast("Item indisponivel.");
@@ -108,12 +120,14 @@ async function enviarPedido() {
   const telefone = $("#customer-phone")?.value.trim() || "";
   const endereco = $("#customer-place")?.value.trim() || "";
   const pagamento = $("#payment-method")?.value || "";
+  const trocoPara = normalizarTroco($("#change-for")?.value);
   const observacao = $("#order-note")?.value.trim() || "";
   const modoMesa = Boolean(sessaoMesa.n);
 
   if (!modoMesa) {
     if (!cliente || !pagamento) return toast("Preencha nome e forma de pagamento.");
     if (estado.modalidade === "entrega" && !endereco) return toast("Informe o endereco de entrega.");
+    if (pagamento === "Dinheiro" && !trocoPara) return toast("Informe troco para quanto.");
   }
 
   const corpo = {
@@ -121,6 +135,7 @@ async function enviarPedido() {
     phone: telefone,
     place: modoMesa ? `Mesa ${sessaoMesa.n} - salao` : estado.modalidade === "entrega" ? endereco : "Retirada",
     payment: modoMesa ? "Pagar no balcao" : pagamento,
+    trocoPara: modoMesa ? null : trocoPara,
     note: observacao,
     coupon: modoMesa ? "" : codigoAplicado(),
     fulfillment: modoMesa ? "mesa" : estado.modalidade,
@@ -132,8 +147,10 @@ async function enviarPedido() {
 
   botao.disabled = true;
   botao.textContent = "Enviando...";
+  const controle = new AbortController();
+  const tempo = setTimeout(() => controle.abort(new Error("timeout")), 20000);
   try {
-    const { pedido } = await apiPublica.criarPedido(corpo);
+    const { pedido } = await apiPublica.criarPedido(corpo, { sinal: controle.signal });
 
     carrinho.limpar();
     limparEstadoCupom();
@@ -143,6 +160,8 @@ async function enviarPedido() {
       if (campo) campo.value = "";
     }
     if ($("#payment-method")) $("#payment-method").value = "";
+    if ($("#change-for")) $("#change-for").value = "";
+    atualizarCampoTroco();
     entrega.limparWidget();
 
     if (modoMesa) {
@@ -161,6 +180,7 @@ async function enviarPedido() {
     await carregarCardapio();
     redesenhar();
   } finally {
+    clearTimeout(tempo);
     botao.disabled = false;
     botao.textContent = modoMesa ? "Enviar para a cozinha" : "Enviar pedido";
   }
@@ -192,6 +212,7 @@ function ligarEventos() {
 
   $("#mode-retirada")?.addEventListener("click", () => definirModalidade("retirada"));
   $("#mode-entrega")?.addEventListener("click", () => definirModalidade("entrega"));
+  $("#payment-method")?.addEventListener("change", atualizarCampoTroco);
 
   $("#customer-place")?.addEventListener("input", evento => entrega.buscarEndereco(evento.target.value, redesenhar));
   $("#apply-coupon")?.addEventListener("click", async () => {
@@ -208,6 +229,7 @@ function ligarEventos() {
   $("#clear-cart")?.addEventListener("click", () => {
     carrinho.limpar();
     limparEstadoCupom();
+    if ($("#change-for")) $("#change-for").value = "";
     redesenhar();
   });
   $("#open-cart")?.addEventListener("click", () => document.body.classList.add("cart-open"));
@@ -237,6 +259,7 @@ async function iniciar() {
   if (numeroMesa) iniciarModoMesa(numeroMesa);
 
   ligarEventos();
+  atualizarCampoTroco();
   await carregarCardapio();
   redesenhar();
 

@@ -6,10 +6,34 @@
  * na hora, em vez de deixar o rate limit sem efeito ate alguem reparar. */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import fs from "node:fs";
 import { z } from "zod";
 
 const aqui = path.dirname(fileURLToPath(import.meta.url));
 const RAIZ_BACKEND = path.resolve(aqui, "..", "..");
+
+function carregarArquivoEnv(arquivo) {
+  if (!fs.existsSync(arquivo)) return;
+  const conteudo = fs.readFileSync(arquivo, "utf8");
+  for (const linha of conteudo.split(/\r?\n/)) {
+    const limpa = linha.trim();
+    if (!limpa || limpa.startsWith("#")) continue;
+    const indice = limpa.indexOf("=");
+    if (indice <= 0) continue;
+    const chave = limpa.slice(0, indice).trim();
+    const valorBruto = limpa.slice(indice + 1).trim();
+    if (process.env[chave] !== undefined) continue;
+    const valor = valorBruto.replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
+    process.env[chave] = valor;
+  }
+}
+
+const RAIZ_PROJETO = path.resolve(RAIZ_BACKEND, "..");
+
+carregarArquivoEnv(path.resolve(RAIZ_PROJETO, ".env"));
+carregarArquivoEnv(path.resolve(RAIZ_PROJETO, ".env.local"));
+carregarArquivoEnv(path.resolve(RAIZ_BACKEND, ".env"));
+carregarArquivoEnv(path.resolve(RAIZ_BACKEND, ".env.local"));
 
 const booleano = z
   .union([z.boolean(), z.string()])
@@ -38,6 +62,9 @@ const schema = z.object({
 
   MAPBOX_TOKEN: z.string().optional(),
   MAPBOX_API: z.string().url().default("https://api.mapbox.com"),
+  SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(10).optional(),
+  SUPABASE_INSECURE_TLS: booleano.optional(),
 
   /* Tetos por IP. Configuraveis porque a loja com wifi unico faz dezenas de
    * clientes chegarem com o mesmo IP — o padrao serve para a maioria, mas quem
@@ -50,6 +77,7 @@ const schema = z.object({
   /* Usado so pelo `npm run seed` para criar o primeiro administrador. */
   ADMIN_BOOTSTRAP_USER: z.string().min(3).default("admin"),
   ADMIN_BOOTSTRAP_PASSWORD: z.string().min(10).optional(),
+  BALCAO_BOOTSTRAP_PASSWORD: z.string().min(10).optional(),
 
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error", "silent"]).default("info")
 });
@@ -68,6 +96,7 @@ export const env = Object.freeze({
   RAIZ_BACKEND,
   ehProducao: resultado.data.NODE_ENV === "production",
   ehTeste: resultado.data.NODE_ENV === "test",
+  SUPABASE_INSECURE_TLS: resultado.data.SUPABASE_INSECURE_TLS ?? resultado.data.NODE_ENV !== "production",
   DB_FILE: path.join(resultado.data.DATA_DIR, "baixok.sqlite"),
   BACKUP_DIR: path.join(resultado.data.DATA_DIR, "backups"),
   UPLOADS_DIR: path.join(resultado.data.DATA_DIR, "uploads"),

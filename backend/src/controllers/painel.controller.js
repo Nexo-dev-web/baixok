@@ -147,15 +147,15 @@ export const usuariosController = {
   async criar(req, res) {
     res.status(201).json({ usuario: await usuariosService.criar(req.validado.body, contexto(req)) });
   },
-  atualizar(req, res) {
-    res.json({ usuario: usuariosService.atualizar(Number(req.validado.params.id), req.validado.body, contexto(req)) });
+  async atualizar(req, res) {
+    res.json({ usuario: await usuariosService.atualizar(Number(req.validado.params.id), req.validado.body, contexto(req)) });
   },
   async redefinirSenha(req, res) {
     await usuariosService.redefinirSenha(Number(req.validado.params.id), req.validado.body.senha, contexto(req));
     res.json({ ok: true });
   },
-  remover(req, res) {
-    usuariosService.remover(Number(req.validado.params.id), contexto(req));
+  async remover(req, res) {
+    await usuariosService.remover(Number(req.validado.params.id), contexto(req));
     res.json({ ok: true });
   },
   auditoria(req, res) {

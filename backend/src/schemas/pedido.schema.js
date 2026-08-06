@@ -19,6 +19,7 @@ export const criarPedidoPublicoSchema = z.object({
   place: texto(LIMITES.ENDERECO),
   note: texto(LIMITES.OBSERVACAO),
   payment: texto(LIMITES.PAGAMENTO),
+  trocoPara: z.coerce.number().positive().nullable().optional(),
   coupon: texto(40),
   fulfillment: z.enum(MODALIDADES).default("retirada"),
   tableNumber: z.coerce.number().int().min(1).max(999).nullable().default(null)
@@ -34,6 +35,7 @@ export const criarPedidoManualSchema = z.object({
   place: texto(LIMITES.ENDERECO),
   note: texto(LIMITES.OBSERVACAO),
   payment: texto(LIMITES.PAGAMENTO),
+  trocoPara: z.coerce.number().positive().nullable().optional(),
   channel: z.enum(CANAIS).default("loja"),
   fulfillment: z.enum(MODALIDADES).default("retirada"),
   tableNumber: z.coerce.number().int().min(1).max(999).nullable().default(null)

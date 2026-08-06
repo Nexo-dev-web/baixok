@@ -5,6 +5,20 @@
  * tem nome explicito o bastante para saltar aos olhos numa revisao. */
 import { getDb, paraSqlite, deSqlite } from "../db/connection.js";
 
+const paraLista = valor => {
+  if (!valor) return [];
+  if (Array.isArray(valor)) return valor.filter(Boolean);
+  if (typeof valor === "string") {
+    try {
+      const parsed = JSON.parse(valor);
+      return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+    } catch {
+      return valor.split(",").map(item => item.trim()).filter(Boolean);
+    }
+  }
+  return [];
+};
+
 const paraApi = linha => linha && ({
   id: linha.id,
   usuario: linha.usuario,
@@ -12,7 +26,9 @@ const paraApi = linha => linha && ({
   papel: linha.papel,
   ativo: deSqlite(linha.ativo),
   criadoEm: linha.criado_em,
-  ultimoLogin: linha.ultimo_login
+  ultimoLogin: linha.ultimo_login,
+  abasVer: paraLista(linha.abas_ver),
+  abasEditar: paraLista(linha.abas_editar)
 });
 
 export const usuariosRepo = {
@@ -28,29 +44,57 @@ export const usuariosRepo = {
     return paraApi(getDb().prepare("SELECT * FROM usuarios WHERE usuario = ?").get(usuario));
   },
 
+  buscarPorAuthId(authId) {
+    return paraApi(getDb().prepare("SELECT * FROM usuarios WHERE auth_id = ?").get(authId));
+  },
+
   /* Unico caminho que devolve o hash. Usado so pelo servico de autenticacao. */
   buscarPorUsuarioComHash(usuario) {
     return getDb().prepare("SELECT * FROM usuarios WHERE usuario = ?").get(usuario) || null;
   },
 
-  criar({ usuario, nome, senhaHash, papel, ativo = true }) {
+  criar({ usuario, nome, senhaHash, papel, ativo = true, abasVer = [], abasEditar = [], authId = null }) {
     const info = getDb().prepare(`
-      INSERT INTO usuarios (usuario, nome, senha_hash, papel, ativo)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(usuario, nome, senhaHash, papel, paraSqlite(ativo));
+      INSERT INTO usuarios (usuario, nome, senha_hash, papel, ativo, abas_ver, abas_editar, auth_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      usuario,
+      nome,
+      senhaHash,
+      papel,
+      paraSqlite(ativo),
+      JSON.stringify(paraLista(abasVer)),
+      JSON.stringify(paraLista(abasEditar)),
+      authId
+    );
     return this.buscar(Number(info.lastInsertRowid));
   },
 
-  atualizar(id, { nome, papel, ativo }) {
+  atualizar(id, { nome, papel, ativo, abasVer, abasEditar, authId }) {
     getDb().prepare(`
       UPDATE usuarios
          SET nome = COALESCE(?, nome),
              papel = COALESCE(?, papel),
              ativo = COALESCE(?, ativo),
+             abas_ver = COALESCE(?, abas_ver),
+             abas_editar = COALESCE(?, abas_editar),
+             auth_id = COALESCE(?, auth_id),
              atualizado_em = datetime('now')
        WHERE id = ?
-    `).run(nome ?? null, papel ?? null, ativo === undefined ? null : paraSqlite(ativo), id);
+    `).run(
+      nome ?? null,
+      papel ?? null,
+      ativo === undefined ? null : paraSqlite(ativo),
+      abasVer === undefined ? null : JSON.stringify(paraLista(abasVer)),
+      abasEditar === undefined ? null : JSON.stringify(paraLista(abasEditar)),
+      authId ?? null,
+      id
+    );
     return this.buscar(id);
+  },
+
+  atualizarAuthId(id, authId) {
+    return this.atualizar(id, { authId });
   },
 
   trocarSenha(id, senhaHash) {

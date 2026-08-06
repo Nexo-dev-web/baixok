@@ -15,44 +15,44 @@ import { definirTratamentoDeSessao } from "../../services/http.js";
 import { conectarEventos } from "../../services/realtime.js";
 import { fecharQrMesa } from "../../components/qr-mesa.js";
 import { estado, carregar, marcarConexao } from "./store.js";
-import { ABAS, abasDoPapel, abaInicial, podeVer } from "./abas.js";
+import { ABAS, abaInicial, podeVer } from "./abas.js";
 import { ligarVendaManual } from "./venda-manual.js";
 
 import { desenharPedidos, ligarPedidos } from "./tabs/pedidos.js";
-import { desenharCozinha, ligarCozinha } from "./tabs/cozinha.js";
 import { desenharMesas, ligarMesas } from "./tabs/mesas.js";
 import { desenharProdutos, ligarProdutos } from "./tabs/produtos.js";
 import { desenharPromocoes, desenharCupons, ligarPromocoes } from "./tabs/promocoes.js";
 import { desenharEntrega, ligarEntrega, recarregarRascunhoEntrega } from "./tabs/entrega.js";
 import { desenharEstoque, ligarEstoque } from "./tabs/estoque.js";
 import { desenharDashboard, ligarDashboard } from "./tabs/dashboard.js";
-import { desenharEquipe, ligarEquipe } from "./tabs/equipe.js";
+import { desenharEquipe as desenharUsuarios, ligarEquipe as ligarUsuarios } from "./tabs/equipe.js";
+import { desenharPlano, ligarPlano } from "./tabs/plano.js";
 
 let abaAtual = null;
 
 /* Qual funcao redesenha cada aba, e o que ela precisa recarregar. */
 const DESENHO = {
   pedidos: desenharPedidos,
-  cozinha: desenharCozinha,
   mesas: desenharMesas,
   produtos: desenharProdutos,
   promos: () => { desenharPromocoes(); desenharCupons(); },
   entrega: desenharEntrega,
   estoque: desenharEstoque,
   dashboard: desenharDashboard,
-  equipe: desenharEquipe
+  plano: desenharPlano,
+  usuarios: desenharUsuarios
 };
 
 /* Que abas cada assunto do SSE afeta. Sem este mapa voltariamos ao
  * comportamento antigo: qualquer alteracao redesenhava o sistema inteiro. */
 const AFETADAS = {
-  pedidos: ["pedidos", "cozinha", "mesas", "dashboard"],
+  pedidos: ["pedidos", "mesas", "dashboard"],
   produtos: ["produtos", "estoque", "promos", "dashboard"],
   promocoes: ["promos", "produtos"],
   cupons: ["promos"],
   mesas: ["mesas"],
   entrega: ["entrega"],
-  retomada: ["pedidos", "cozinha", "mesas"]
+  retomada: ["pedidos", "mesas"]
 };
 
 // ------------------------------------------------------------------- sessao ---
@@ -61,18 +61,17 @@ definirTratamentoDeSessao(() => {
 });
 
 // --------------------------------------------------------------------- abas ---
-function montarMenu(papel) {
+function montarMenu(usuario) {
   const nav = $("#nav-list");
-  const permitidas = abasDoPapel(papel);
 
   for (const botao of $$("[data-tab]", nav)) {
-    mostrar(botao, permitidas.some(([chave]) => chave === botao.dataset.tab));
+    mostrar(botao, podeVer(botao.dataset.tab, usuario));
   }
 }
 
 async function abrirAba(chave) {
-  const papel = estado.usuario?.papel;
-  if (!podeVer(chave, papel)) return;
+  const usuario = estado.usuario;
+  if (!podeVer(chave, usuario)) return;
 
   abaAtual = chave;
   for (const secao of $$(".admin-tab")) mostrar(secao, secao.id === `tab-${chave}`);
@@ -123,19 +122,6 @@ function ligarShell() {
     location.replace("/entrar.html");
   });
 
-  $("#trocar-senha")?.addEventListener("click", async () => {
-    const atual = prompt("Sua senha atual:");
-    if (!atual) return;
-    const nova = prompt("Nova senha (minimo 10 caracteres):");
-    if (!nova) return;
-    try {
-      await apiAuth.trocarSenha({ senhaAtual: atual, senhaNova: nova });
-      toast("Senha trocada. As outras sessoes suas foram encerradas.");
-    } catch (erro) {
-      toastFalha(erro);
-    }
-  });
-
   const suporte = $("#support-modal");
   $("#abrir-suporte")?.addEventListener("click", () => mostrar(suporte, true));
   $("#fechar-suporte")?.addEventListener("click", () => mostrar(suporte, false));
@@ -146,14 +132,14 @@ function ligarShell() {
   ligarModal(qr, fecharQrMesa);
 
   ligarPedidos();
-  ligarCozinha();
   ligarMesas();
   ligarProdutos();
   ligarPromocoes();
   ligarEntrega();
   ligarEstoque();
   ligarDashboard();
-  ligarEquipe();
+  ligarPlano();
+  ligarUsuarios();
   ligarVendaManual();
 }
 
@@ -177,7 +163,7 @@ async function iniciar() {
   $("#usuario-nome").textContent = sessao.usuario.nome;
   $("#usuario-papel").textContent = { admin: "Administrador", caixa: "Caixa", cozinha: "Cozinha" }[sessao.usuario.papel];
 
-  montarMenu(sessao.usuario.papel);
+  montarMenu(sessao.usuario);
   ligarShell();
 
   await carregar();
@@ -185,7 +171,7 @@ async function iniciar() {
 
   /* Aba da URL, se o papel permitir; senao a inicial daquele papel. */
   const daUrl = location.hash.slice(1);
-  await abrirAba(podeVer(daUrl, sessao.usuario.papel) ? daUrl : abaInicial(sessao.usuario.papel));
+  await abrirAba(podeVer(daUrl, sessao.usuario) ? daUrl : abaInicial(sessao.usuario));
 
   conectarEventos({
     canal: "operacao",
@@ -205,7 +191,6 @@ async function iniciar() {
    * servidor: um pedido parado ha 20 minutos precisa mudar de cor. */
   setInterval(() => {
     if (abaAtual === "pedidos") desenharPedidos();
-    if (abaAtual === "cozinha") desenharCozinha();
   }, 30000);
 }
 

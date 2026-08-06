@@ -26,14 +26,14 @@
 
     <nav class="nav-list" id="nav-list" aria-label="Secoes">
       <button class="nav-item active" type="button" data-tab="pedidos"><span class="nav-icon" aria-hidden="true">☰</span>Pedidos<span class="nav-badge hidden" id="nav-badge">0</span></button>
-      <button class="nav-item" type="button" data-tab="cozinha"><span class="nav-icon" aria-hidden="true">▦</span>Cozinha (KDS)</button>
       <button class="nav-item" type="button" data-tab="mesas"><span class="nav-icon" aria-hidden="true">▢</span>Mesas (salao)</button>
       <button class="nav-item" type="button" data-tab="produtos"><span class="nav-icon" aria-hidden="true">◱</span>Produtos</button>
       <button class="nav-item" type="button" data-tab="promos"><span class="nav-icon" aria-hidden="true">✦</span>Promocoes</button>
       <button class="nav-item" type="button" data-tab="entrega"><span class="nav-icon" aria-hidden="true">◈</span>Area de entrega</button>
       <button class="nav-item" type="button" data-tab="estoque"><span class="nav-icon" aria-hidden="true">▤</span>Estoque</button>
       <button class="nav-item" type="button" data-tab="dashboard"><span class="nav-icon" aria-hidden="true">◔</span>Dashboard</button>
-      <button class="nav-item" type="button" data-tab="equipe"><span class="nav-icon" aria-hidden="true">◍</span>Equipe</button>
+      <button class="nav-item" type="button" data-tab="plano"><span class="nav-icon" aria-hidden="true">PL</span>Plano do sistema</button>
+      <button class="nav-item" type="button" data-tab="usuarios"><span class="nav-icon" aria-hidden="true">◍</span>Usuarios</button>
     </nav>
 
     <div class="nav-foot">
@@ -41,12 +41,13 @@
         <strong id="usuario-nome">—</strong>
         <span id="usuario-papel"></span>
       </div>
-      <button class="secondary" type="button" id="trocar-senha">Trocar minha senha</button>
       <button class="secondary" type="button" id="sair">Sair</button>
       <button class="secondary" type="button" id="abrir-suporte">◈ Suporte Nexo</button>
       <a class="admin-link" href="/telao.html" target="_blank" rel="noopener">▦ Telao do salao ↗</a>
-      <a class="secondary" href="/index.html" target="_blank" rel="noopener">← App do cliente</a>
-      <div class="nav-credit">feito por <img src="/images/nexo sem fundo.png" alt="Nexo Developer"></div>
+      <a class="secondary" href="/index.html" target="_blank" rel="noopener">← Catálogo</a>
+      <a class="nav-credit" href="https://portfolio-nexo.netlify.app/" target="_blank" rel="noopener">
+        desenvolvido por <span>Nexo Developer</span>
+      </a>
     </div>
   </aside>
 
@@ -72,15 +73,6 @@
       </div>
       <div class="kanban" id="orders-kanban"></div>
       <p class="tab-hint">Dica: arraste um card para qualquer coluna, para frente ou para tras, para corrigir o status.</p>
-    </section>
-
-    <!-- ------------------------------------------------------------ cozinha -->
-    <section class="admin-tab hidden" id="tab-cozinha">
-      <div class="tab-guide">
-        <strong>Como usar esta aba</strong>
-        <p>Tela para o tablet da cozinha: fonte grande, legivel a distancia, unifica entrega e retirada. Toque no pedido para avancar de Preparando para Pronto.</p>
-      </div>
-      <div class="kds-board" id="kds-board"></div>
     </section>
 
     <!-- -------------------------------------------------------------- mesas -->
@@ -257,32 +249,40 @@
       </div>
     </section>
 
-    <!-- ------------------------------------------------------------- equipe -->
-    <section class="admin-tab hidden" id="tab-equipe">
+    <!-- -------------------------------------------------------------- plano -->
+    <section class="admin-tab hidden" id="tab-plano">
       <div class="tab-guide">
         <strong>Como usar esta aba</strong>
-        <p>Cada pessoa entra com o proprio login. <strong>Administrador</strong> mexe em cadastro, precos, cupons e entrega; <strong>caixa</strong> opera a fila, as mesas e o estoque; <strong>cozinha</strong> so ve a fila e avanca o preparo.</p>
+        <p>Mostra a mensalidade do sistema, o vencimento fixo todo dia 15 e quantos dias faltam para a proxima cobranca.</p>
+      </div>
+      <div id="plano-sistema"></div>
+    </section>
+
+    <!-- ----------------------------------------------------------- usuarios -->
+    <section class="admin-tab hidden" id="tab-usuarios">
+      <div class="tab-guide">
+        <strong>Como usar esta aba</strong>
+        <p>Cada pessoa entra com o proprio login do Supabase. <strong>Administrador</strong> mexe em cadastro, precos, cupons, entrega e permissoes; <strong>balcao</strong> ve e edita apenas o que voce liberar.</p>
       </div>
       <div class="promo-layout">
         <section class="panel">
           <h2>Quem tem acesso</h2>
+          <p class="small faint">Os usuarios sao criados no Supabase. Aqui voce so ajusta papel, permissao e status de acesso.</p>
           <div class="user-list" id="user-list"></div>
           <form class="panel-divider" id="form-usuario">
-            <strong class="field-label gold">Novo acesso</strong>
+            <strong class="field-label gold" id="user-form-title">Selecione um usuario</strong>
+            <p class="small faint" id="user-form-hint">Os usuarios sao criados no Supabase. Aqui voce ajusta o acesso de quem ja existe.</p>
             <div class="field-row">
               <input id="user-name" required placeholder="Nome da pessoa" maxlength="80">
-              <input id="user-login" required placeholder="usuario" maxlength="50" autocomplete="off">
-            </div>
-            <div class="field-row">
-              <input id="user-password" required type="password" placeholder="Senha (min. 10 caracteres)" minlength="10" autocomplete="new-password">
               <select id="user-role" aria-label="Papel">
                 <option value="caixa">Caixa</option>
                 <option value="cozinha">Cozinha</option>
                 <option value="admin">Administrador</option>
               </select>
             </div>
+            <div class="permission-grid" id="user-permissions"></div>
             <p class="form-error hidden" id="user-error" role="alert"></p>
-            <button class="primary wide" type="submit">Criar acesso</button>
+            <button class="primary wide" type="submit" id="user-submit">Salvar permissoes</button>
           </form>
         </section>
 
@@ -305,6 +305,11 @@
       <div class="chip-row" id="manual-channels"></div>
       <input id="manual-customer" placeholder="Nome do cliente (opcional)" maxlength="80">
       <div class="chip-row" id="manual-payments"></div>
+      <label class="change-field hidden" id="manual-change-field">
+        <span>Troco para quanto?</span>
+        <small>Preencha quando a forma de pagamento for dinheiro.</small>
+        <input id="manual-change-for" placeholder="Ex: 100,00" inputmode="decimal">
+      </label>
       <input id="manual-search" type="search" placeholder="Buscar produto para adicionar...">
       <div class="manual-product-list" id="manual-products"></div>
       <div class="manual-cart" id="manual-cart"></div>

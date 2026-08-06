@@ -134,6 +134,8 @@ body.cart-open .mobile-cart { opacity: 0; pointer-events: none; transform: trans
 .coupon-input-row .secondary { flex: none; }
 .coupon-feedback { color: var(--danger); font-size: .78rem; font-weight: 600; line-height: 1.4; }
 .coupon-feedback.ok { color: var(--green); }
+.change-field { display: grid; gap: 6px; }
+.change-field small { color: var(--muted); font-size: .74rem; line-height: 1.35; }
 .coupon-applied { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border-radius: var(--radius-sm); background: var(--green-panel); border: 1.5px solid rgba(143,174,109,.4); }
 .coupon-applied code { padding: 3px 9px; border-radius: var(--radius-xs); background: var(--soft); color: var(--gold-light); font-family: ui-monospace, Menlo, monospace; font-size: .76rem; font-weight: 700; letter-spacing: 1px; }
 .coupon-applied em { color: var(--green); font-style: normal; font-size: .78rem; font-weight: 600; }
@@ -197,6 +199,7 @@ body[data-mode="mesa"] .service-mode,
 body[data-mode="mesa"] .pickup-banner,
 body[data-mode="mesa"] #place-label,
 body[data-mode="mesa"] .cart label:has(#customer-phone),
+body[data-mode="mesa"] .cart label:has(#change-field),
 body[data-mode="mesa"] .cart label:has(#payment-method) { display: none; }
 
 

@@ -50,6 +50,7 @@ export const publicoController = {
         subtotal: pedido.subtotal,
         discount: pedido.discount,
         deliveryFee: pedido.deliveryFee,
+        trocoPara: pedido.trocoPara,
         total: pedido.total
       }
     });

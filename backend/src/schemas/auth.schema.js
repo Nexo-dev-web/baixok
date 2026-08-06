@@ -32,13 +32,17 @@ export const criarUsuarioSchema = z.object({
     .regex(/^[a-z0-9._-]+$/, "Use apenas letras, numeros, ponto, hifen ou sublinhado."),
   nome: texto(80, { obrigatorio: true }),
   senha: senhaSchema,
-  papel: z.enum(TODOS_PAPEIS, { message: "Papel invalido." })
+  papel: z.enum(TODOS_PAPEIS, { message: "Papel invalido." }),
+  abasVer: z.array(z.string().trim().min(1).max(40)).default([]),
+  abasEditar: z.array(z.string().trim().min(1).max(40)).default([])
 });
 
 export const atualizarUsuarioSchema = z.object({
   nome: texto(80).optional(),
   papel: z.enum(TODOS_PAPEIS).optional(),
-  ativo: z.boolean().optional()
+  ativo: z.boolean().optional(),
+  abasVer: z.array(z.string().trim().min(1).max(40)).optional(),
+  abasEditar: z.array(z.string().trim().min(1).max(40)).optional()
 });
 
 export const redefinirSenhaSchema = z.object({ senha: senhaSchema });

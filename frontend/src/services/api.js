@@ -9,7 +9,7 @@ import { http } from "./http.js";
 export const apiPublica = {
   cardapio: () => http.get("/publico/cardapio"),
   mesa: numero => http.get(`/publico/mesas/${numero}`),
-  criarPedido: pedido => http.post("/publico/pedidos", pedido),
+  criarPedido: (pedido, opcoes) => http.post("/publico/pedidos", pedido, opcoes),
   validarCupom: dados => http.post("/publico/cupons/validar", dados),
   statusEntrega: () => http.get("/publico/entrega/status"),
   buscarEndereco: (q, opcoes) => http.get("/publico/entrega/buscar", { q }, opcoes),
@@ -27,7 +27,7 @@ export const apiPedidos = {
   listar: filtros => http.get("/painel/pedidos", filtros),
   abertos: () => http.get("/painel/pedidos/abertos"),
   buscar: id => http.get(`/painel/pedidos/${id}`),
-  criarManual: pedido => http.post("/painel/pedidos", pedido),
+  criarManual: (pedido, opcoes) => http.post("/painel/pedidos", pedido, opcoes),
   mudarStatus: (id, status) => http.patch(`/painel/pedidos/${id}/status`, { status }),
   cancelar: (id, motivo) => http.post(`/painel/pedidos/${id}/cancelar`, { motivo }),
   marcarImpresso: id => http.post(`/painel/pedidos/${id}/impresso`)
