@@ -17,6 +17,21 @@ do Node instalado.
 - `telao.html` - telao de senhas do salao (pede senha)
 - `entrar.html` - tela de senha do balcao
 
+### Supabase
+
+Se quiser usar o banco no Supabase em vez do arquivo local, rode o SQL e inicie o
+servidor com estas variaveis no ambiente:
+
+```
+SUPABASE_URL=https://<seu-projeto>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<sua-chave-de-servidor>
+```
+
+O frontend nao recebe nenhuma dessas chaves.
+
+Se preferir, coloque essas variaveis em `.env.local` na raiz do projeto. O
+`server.js` carrega esse arquivo automaticamente na inicializacao.
+
 ## Senha do balcao
 
 Na primeira execucao o servidor sorteia uma senha, guarda em `data/senha.txt` e mostra

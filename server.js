@@ -9,10 +9,58 @@
  * copia. Com ele, o celular do cliente e o tablet do balcao veem a mesma fila.
  */
 const http = require("http");
+const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const url = require("url");
 const crypto = require("crypto");
+
+function carregarEnvArquivo(caminho) {
+  try {
+    const texto = fs.readFileSync(caminho, "utf8");
+    texto.split(/\r?\n/).forEach(linha => {
+      const limpa = linha.trim();
+      if (!limpa || limpa.startsWith("#")) return;
+      const separador = limpa.indexOf("=");
+      if (separador < 1) return;
+      const chave = limpa.slice(0, separador).trim();
+      let valor = limpa.slice(separador + 1).trim();
+      if ((valor.startsWith('"') && valor.endsWith('"')) || (valor.startsWith("'") && valor.endsWith("'"))) {
+        valor = valor.slice(1, -1);
+      }
+      if (!(chave in process.env)) process.env[chave] = valor;
+    });
+  } catch {}
+}
+
+carregarEnvArquivo(path.join(__dirname, ".env.local"));
+carregarEnvArquivo(path.join(__dirname, ".env"));
+
+function requestExterno(rawUrl, { method = "GET", headers = {}, body = null, responseType = "text" } = {}) {
+  return new Promise((resolve, reject) => {
+    const alvo = new URL(rawUrl);
+    const cliente = alvo.protocol === "http:" ? http : https;
+    const req = cliente.request(alvo, {
+      method,
+      headers,
+      rejectUnauthorized: false
+    }, res => {
+      const chunks = [];
+      res.on("data", chunk => chunks.push(chunk));
+      res.on("end", () => {
+        const buffer = Buffer.concat(chunks);
+        resolve({
+          status: res.statusCode || 0,
+          headers: res.headers,
+          body: responseType === "buffer" ? buffer : buffer.toString("utf8")
+        });
+      });
+    });
+    req.on("error", reject);
+    if (body != null) req.write(body);
+    req.end();
+  });
+}
 
 const PORT = Number(process.env.PORT || 8000);
 const ROOT = __dirname;
@@ -128,6 +176,11 @@ const EMPTY = {
   delivery: { endereco: "", lng: null, lat: null, zones: [] }
 };
 
+const SUPABASE_URL = String(process.env.SUPABASE_URL || "").replace(/\/+$/, "");
+const SUPABASE_KEY = String(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || "").trim();
+const SUPABASE_ON = Boolean(SUPABASE_URL && SUPABASE_KEY);
+const SUPABASE_STATE_TABLE = "app_state";
+
 const MAPBOX_FILE = path.join(DATA_DIR, "mapbox.txt");
 // permite apontar para outro endereco em teste ou atras de um proxy proprio
 const MAPBOX_API = process.env.MAPBOX_API || "https://api.mapbox.com";
@@ -174,9 +227,12 @@ async function geocodificar(texto) {
   // proximity puxa os resultados para perto da loja: "Rua Sacadura Cabral" existe em varias cidades
   if (loja.lng != null && loja.lat != null) params.set("proximity", `${loja.lng},${loja.lat}`);
 
-  const resposta = await fetch(`${MAPBOX_API}/search/geocode/v6/forward?${params}`);
-  if (!resposta.ok) throw new Error(`Mapbox respondeu ${resposta.status}`);
-  const dados = await resposta.json();
+  const resposta = await requestExterno(`${MAPBOX_API}/search/geocode/v6/forward?${params}`, {
+    method: "GET",
+    headers: { Accept: "application/json" }
+  });
+  if (resposta.status < 200 || resposta.status >= 300) throw new Error(`Mapbox respondeu ${resposta.status}`);
+  const dados = JSON.parse(resposta.body || "{}");
   return (dados.features || []).map(f => ({
     id: f.properties?.mapbox_id || "",
     nome: f.properties?.name || "",
@@ -206,6 +262,7 @@ function taxaParaEndereco(endereco, coordenada) {
   };
 }
 let state = { ...EMPTY, rev: 0 };
+let supabasePersistMode = SUPABASE_ON ? "state" : "local";
 let listeners = [];
 const MAX_OUVINTES = 200;
 
@@ -236,32 +293,364 @@ function backupsMaisNovosPrimeiro() {
     return [];
   }
 }
-function load() {
+
+function estadoNormalizado(dados = {}) {
+  const state = { ...EMPTY, ...dados };
+  state.products = Array.isArray(state.products) ? state.products : [];
+  state.orders = Array.isArray(state.orders) ? state.orders : [];
+  state.tables = Array.isArray(state.tables) ? state.tables : [];
+  state.promos = Array.isArray(state.promos) ? state.promos : [];
+  state.coupons = Array.isArray(state.coupons) ? state.coupons : [];
+  const delivery = state.delivery && typeof state.delivery === "object" ? state.delivery : { ...EMPTY.delivery };
+  state.delivery = {
+    ...EMPTY.delivery,
+    ...delivery,
+    zones: Array.isArray(delivery.zones)
+      ? delivery.zones.map(z => ({ km: Number(z.km) || 0, fee: Number(z.fee) || 0, min: Number(z.min) || 0 }))
+        .filter(z => z.km > 0)
+        .sort((a, b) => a.km - b.km)
+      : []
+  };
+  state.rev = Number.isFinite(Number(state.rev)) ? Number(state.rev) : 0;
+  return state;
+}
+function snapshotState() {
+  return estadoNormalizado(state);
+}
+function supabaseHeaders(extra = {}) {
+  return {
+    apikey: SUPABASE_KEY,
+    Authorization: `Bearer ${SUPABASE_KEY}`,
+    Accept: "application/json",
+    ...extra
+  };
+}
+async function supabaseRequest(pathname, options = {}) {
+  const resposta = await requestExterno(`${SUPABASE_URL}${pathname}`, {
+    method: options.method || "GET",
+    headers: supabaseHeaders(options.headers || {}),
+    body: options.body ?? null
+  });
+  const texto = resposta.body || "";
+  let dados = null;
+  if (texto) {
+    try { dados = JSON.parse(texto); } catch { dados = texto; }
+  }
+  if (resposta.status < 200 || resposta.status >= 300) {
+    const mensagem = dados && typeof dados === "object"
+      ? dados.message || dados.error || dados.details || JSON.stringify(dados)
+      : String(dados || `status ${resposta.status}`);
+    throw new Error(`Supabase ${resposta.status}: ${mensagem}`);
+  }
+  return dados;
+}
+function jsonArray(valor) {
+  if (Array.isArray(valor)) return valor;
+  if (typeof valor === "string") {
+    try {
+      const parsed = JSON.parse(valor);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {}
+  }
+  return [];
+}
+function mapLegacyOrder(row) {
+  return {
+    id: row.id,
+    createdAt: row.created_at || row.createdAt || "",
+    status: row.status || "novo",
+    customer: row.customer || "",
+    phone: row.phone || "",
+    place: row.place || "",
+    note: row.note || "",
+    payment: row.payment || "",
+    channel: row.channel || "",
+    fulfillment: row.fulfillment || "",
+    items: jsonArray(row.items),
+    subtotal: Number(row.subtotal || 0),
+    coupon: row.coupon || "",
+    discount: Number(row.discount || 0),
+    deliveryFee: Number(row.delivery_fee ?? row.deliveryFee ?? 0),
+    deliveryKm: row.delivery_km ?? row.deliveryKm ?? null,
+    deliveryZone: row.delivery_zone || row.deliveryZone || "",
+    total: Number(row.total || 0),
+    printed: Boolean(row.printed),
+    stockDeducted: Boolean(row.stock_deducted ?? row.stockDeducted),
+    meta: row.meta && typeof row.meta === "object" ? row.meta : {}
+  };
+}
+async function supabaseReadLegacyState() {
+  const [products, orders, tables, promos, coupons, deliveryRows, zones] = await Promise.all([
+    supabaseRequest("/rest/v1/products?select=*", { method: "GET" }).catch(() => []),
+    supabaseRequest("/rest/v1/orders?select=*", { method: "GET" }).catch(() => []),
+    supabaseRequest("/rest/v1/tables?select=*", { method: "GET" }).catch(() => []),
+    supabaseRequest("/rest/v1/promos?select=*", { method: "GET" }).catch(() => []),
+    supabaseRequest("/rest/v1/coupons?select=*", { method: "GET" }).catch(() => []),
+    supabaseRequest("/rest/v1/delivery?select=*", { method: "GET" }).catch(() => []),
+    supabaseRequest("/rest/v1/delivery_zones?select=*&order=km.asc", { method: "GET" }).catch(() => [])
+  ]);
+  const temConteudo = [products, orders, tables, promos, coupons, deliveryRows, zones].some(lista => Array.isArray(lista) && lista.length);
+  if (!temConteudo) return null;
+  const delivery = deliveryRows[0] || {};
+  return estadoNormalizado({
+    products: Array.isArray(products) ? products.map(row => ({
+      id: row.id,
+      name: row.name || "",
+      category: row.category || "",
+      price: Number(row.price || 0),
+      stock: Number(row.stock || 0),
+      minStock: Number(row.min_stock ?? row.minStock ?? 0),
+      active: row.active !== false,
+      image: row.image || "",
+      badge: row.badge || "",
+      description: row.description || ""
+    })) : [],
+    orders: Array.isArray(orders) ? orders.map(mapLegacyOrder) : [],
+    tables: Array.isArray(tables) ? tables.map(row => ({
+      n: Number(row.n),
+      status: row.status || "livre",
+      openedAt: row.opened_at || row.openedAt || null,
+      items: jsonArray(row.items)
+    })) : [],
+    promos: Array.isArray(promos) ? promos.map(row => ({
+      id: row.id,
+      productId: row.product_id || row.productId || "",
+      price: Number(row.price || 0),
+      until: row.until || null
+    })) : [],
+    coupons: Array.isArray(coupons) ? coupons.map(row => ({
+      code: row.code,
+      kind: row.kind || "pct",
+      amount: Number(row.amount || 0),
+      min: Number(row.min || 0),
+      once: Boolean(row.once),
+      until: row.until || null,
+      uses: Number(row.uses || 0),
+      active: row.active !== false
+    })) : [],
+    delivery: {
+      endereco: delivery.endereco || "",
+      lng: delivery.lng ?? null,
+      lat: delivery.lat ?? null,
+      zones: Array.isArray(zones)
+        ? zones.map(z => ({ km: Number(z.km) || 0, fee: Number(z.fee) || 0, min: Number(z.min) || 0 }))
+          .filter(z => z.km > 0)
+          .sort((a, b) => a.km - b.km)
+        : []
+    }
+  });
+}
+function rowProducto(product) {
+  return {
+    id: product.id,
+    name: product.name || "",
+    category: product.category || "",
+    price: Number(product.price || 0),
+    stock: Number(product.stock || 0),
+    min_stock: Number(product.minStock ?? product.min_stock ?? 0),
+    active: product.active !== false,
+    image: product.image || "",
+    badge: product.badge || "",
+    description: product.description || ""
+  };
+}
+function rowPedido(order) {
+  return {
+    id: order.id,
+    created_at: order.createdAt || new Date().toISOString(),
+    status: order.status || "novo",
+    customer: order.customer || "",
+    phone: order.phone || "",
+    place: order.place || "",
+    note: order.note || "",
+    payment: order.payment || "",
+    channel: order.channel || "",
+    fulfillment: order.fulfillment || "",
+    subtotal: Number(order.subtotal || 0),
+    coupon: order.coupon || "",
+    discount: Number(order.discount || 0),
+    delivery_fee: Number(order.deliveryFee || 0),
+    delivery_km: order.deliveryKm ?? null,
+    delivery_zone: order.deliveryZone || "",
+    total: Number(order.total || 0),
+    printed: Boolean(order.printed),
+    stock_deducted: Boolean(order.stockDeducted),
+    items: Array.isArray(order.items) ? order.items : [],
+    meta: order.meta && typeof order.meta === "object" ? order.meta : {}
+  };
+}
+function rowMesa(table) {
+  return {
+    n: Number(table.n),
+    status: table.status || "livre",
+    opened_at: table.openedAt || null,
+    items: Array.isArray(table.items) ? table.items : []
+  };
+}
+function rowPromo(promo) {
+  return {
+    id: promo.id,
+    product_id: promo.productId || "",
+    price: Number(promo.price || 0),
+    until: promo.until || null
+  };
+}
+function rowCupom(coupon) {
+  return {
+    code: coupon.code,
+    kind: coupon.kind || "pct",
+    amount: Number(coupon.amount || 0),
+    min: Number(coupon.min || 0),
+    once: Boolean(coupon.once),
+    until: coupon.until || null,
+    uses: Number(coupon.uses || 0),
+    active: coupon.active !== false
+  };
+}
+function rowZona(zona) {
+  return {
+    delivery_id: 1,
+    km: Number(zona.km || 0),
+    fee: Number(zona.fee || 0),
+    min: Number(zona.min || 0)
+  };
+}
+async function supabaseUpsert(table, rows, conflict) {
+  if (!rows.length) return;
+  await supabaseRequest(`/rest/v1/${table}?on_conflict=${conflict}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates,return=minimal"
+    },
+    body: JSON.stringify(rows)
+  });
+}
+async function supabaseDeleteMissing(table, key, keepIds) {
+  if (!keepIds.length) {
+    await supabaseRequest(`/rest/v1/${table}?${key}=not.is.null`, { method: "DELETE" });
+    return;
+  }
+  const codificados = keepIds.map(valor => String(valor).replace(/,/g, "\\,")).join(",");
+  await supabaseRequest(`/rest/v1/${table}?${key}=not.in.(${codificados})`, { method: "DELETE" });
+}
+async function salvarEstadoLegacySupabase(snapshot) {
+  const payload = estadoNormalizado(snapshot);
+  await supabaseRequest(`/rest/v1/products?id=not.is.null`, { method: "DELETE" });
+  await supabaseUpsert("products", payload.products.map(rowProducto), "id");
+
+  await supabaseUpsert("orders", payload.orders.map(rowPedido), "id");
+
+  await supabaseRequest(`/rest/v1/tables?n=not.is.null`, { method: "DELETE" });
+  await supabaseUpsert("tables", payload.tables.map(rowMesa), "n");
+
+  await supabaseRequest(`/rest/v1/promos?id=not.is.null`, { method: "DELETE" });
+  await supabaseUpsert("promos", payload.promos.map(rowPromo), "id");
+
+  await supabaseRequest(`/rest/v1/coupons?code=not.is.null`, { method: "DELETE" });
+  await supabaseUpsert("coupons", payload.coupons.map(rowCupom), "code");
+
+  await supabaseUpsert("delivery", [{ id: 1, endereco: payload.delivery.endereco || "", lng: payload.delivery.lng ?? null, lat: payload.delivery.lat ?? null }], "id");
+
+  await supabaseRequest(`/rest/v1/delivery_zones?delivery_id=eq.1`, { method: "DELETE" });
+  await supabaseUpsert("delivery_zones", payload.delivery.zones.map(rowZona), "delivery_id,km");
+}
+async function carregarEstadoSupabase() {
+  try {
+    const rows = await supabaseRequest(`/rest/v1/${SUPABASE_STATE_TABLE}?select=rev,payload&id=eq.1`, { method: "GET" });
+    if (rows && Array.isArray(rows) && rows[0]) {
+      supabasePersistMode = "state";
+      const row = rows[0];
+      return estadoNormalizado({ ...(row.payload || {}), rev: Number(row.rev ?? row.payload?.rev ?? 0) });
+    }
+  } catch (error) {
+    if (!String(error.message || "").includes("app_state")) {
+      console.log(`AVISO: Supabase indisponivel (${error.message}). Usando banco local.`);
+      return null;
+    }
+  }
+  const legado = await supabaseReadLegacyState().catch(error => {
+    console.log(`AVISO: nao consegui ler as tabelas do Supabase (${error.message}).`);
+    return null;
+  });
+  if (legado) {
+    supabasePersistMode = "legacy";
+    return legado;
+  }
+  supabasePersistMode = "legacy";
+  return estadoNormalizado({ ...EMPTY, rev: 0 });
+}
+async function salvarEstadoSupabase(snapshot = snapshotState()) {
+  const payload = estadoNormalizado(snapshot);
+  if (supabasePersistMode === "legacy") {
+    await salvarEstadoLegacySupabase(payload);
+    return;
+  }
+  try {
+    const body = [{ id: 1, rev: Number(payload.rev || 0), payload }];
+    await supabaseRequest(`/rest/v1/${SUPABASE_STATE_TABLE}?on_conflict=id`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=representation"
+      },
+      body: JSON.stringify(body)
+    });
+  } catch (error) {
+    if (String(error.message || "").includes("app_state")) {
+      supabasePersistMode = "legacy";
+      await salvarEstadoLegacySupabase(payload);
+      return;
+    }
+    throw error;
+  }
+}
+
+function loadLocal() {
   const candidatos = [DATA_FILE, ...backupsMaisNovosPrimeiro()];
   for (const file of candidatos) {
     try {
-      state = { ...EMPTY, rev: 0, ...lerArquivo(file) };
+      state = estadoNormalizado({ ...EMPTY, rev: 0, ...lerArquivo(file) });
       if (file !== DATA_FILE) {
         console.log(`AVISO: ${DATA_FILE} ilegivel. Restaurado de ${file}`);
-        gravar();   // reescreve ja: o arquivo quebrado nao pode continuar no disco
+        void gravar();   // reescreve ja: o arquivo quebrado nao pode continuar no disco
       }
       return;
     } catch (error) {
       if (fs.existsSync(file)) console.log(`AVISO: ${file} nao pode ser lido (${error.message})`);
     }
   }
-  state = { ...EMPTY, rev: 0 };
+  state = estadoNormalizado({ ...EMPTY, rev: 0 });
+}
+
+async function load() {
+  if (SUPABASE_ON) {
+    const remoto = await carregarEstadoSupabase();
+    if (remoto) {
+      state = remoto;
+      return;
+    }
+  }
+  loadLocal();
 }
 
 let saveTimer = null;
 let backupDoDia = null;
 function save() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(gravar, 120);
+  saveTimer = setTimeout(() => {
+    Promise.resolve(gravar()).catch(error => {
+      console.log(`AVISO: nao consegui gravar o estado (${error.message})`);
+    });
+  }, 120);
 }
 /* Grava em arquivo temporario e renomeia. O rename e atomico no mesmo disco:
  * ou o arquivo antigo continua inteiro, ou o novo esta completo. Nunca truncado. */
-function gravar() {
+async function gravar() {
+  if (SUPABASE_ON) {
+    await salvarEstadoSupabase();
+    return;
+  }
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const texto = JSON.stringify(state, null, 2);
   const temporario = `${DATA_FILE}.tmp`;
@@ -608,9 +997,9 @@ const server = http.createServer(async (req, res) => {
     const pino = `pin-l-restaurant+c97443(${loja.lng},${loja.lat})`;
     const alvo = `${MAPBOX_API}/styles/v1/mapbox/dark-v11/static/${pino}/${loja.lng},${loja.lat},${zoom.toFixed(1)}/640x420@2x?access_token=${token}&attribution=true&logo=true`;
     try {
-      const imagem = await fetch(alvo);
-      if (!imagem.ok) return sendJson(res, 502, { erro: `Mapbox respondeu ${imagem.status}` });
-      const buffer = Buffer.from(await imagem.arrayBuffer());
+      const imagem = await requestExterno(alvo, { method: "GET", responseType: "buffer" });
+      if (imagem.status < 200 || imagem.status >= 300) return sendJson(res, 502, { erro: `Mapbox respondeu ${imagem.status}` });
+      const buffer = Buffer.from(imagem.body);
       res.writeHead(200, { "Content-Type": "image/png", "Content-Length": buffer.length, "Cache-Control": "no-store" });
       return res.end(buffer);
     } catch (error) {
@@ -686,16 +1075,20 @@ setInterval(() => {
 
 // grava o que estiver pendente antes de sair, em vez de perder os ultimos 120ms
 ["SIGINT", "SIGTERM"].forEach(sinal => process.on(sinal, () => {
-  try { gravar(); } catch {}
-  process.exit(0);
+  Promise.resolve(gravar()).catch(() => {}).finally(() => process.exit(0));
 }));
 
-load();
-carregarSessoes();
-server.listen(PORT, () => {
-  const senha = senhaDaLoja();
-  console.log(`Baixo K rodando em http://localhost:${PORT}`);
-  console.log(`Estado compartilhado em ${DATA_FILE}`);
-  console.log(`Senha do balcao: ${senha}`);
-  if (!process.env.BAIXOK_SENHA) console.log(`(guardada em ${SENHA_FILE} - troque com a variavel BAIXOK_SENHA)`);
+(async () => {
+  await load();
+  carregarSessoes();
+  server.listen(PORT, () => {
+    const senha = senhaDaLoja();
+    console.log(`Baixo K rodando em http://localhost:${PORT}`);
+    console.log(SUPABASE_ON ? "Estado compartilhado no Supabase" : `Estado compartilhado em ${DATA_FILE}`);
+    console.log(`Senha do balcao: ${senha}`);
+    if (!process.env.BAIXOK_SENHA) console.log(`(guardada em ${SENHA_FILE} - troque com a variavel BAIXOK_SENHA)`);
+  });
+})().catch(error => {
+  console.error("Falha ao iniciar o servidor:", error);
+  process.exit(1);
 });
