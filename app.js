@@ -712,8 +712,14 @@ function buscarEnderecoCliente(termo) {
   buscaEnderecoTimer = setTimeout(async () => {
     try {
       const { resultados = [] } = await (await fetch(`/api/entrega/buscar?q=${encodeURIComponent(termo)}`)).json();
+      /* O endereco vai num data-, e nao dentro de aspas no onclick.
+       * Escapado para HTML, o apostrofo virava &#039;, que o navegador decodifica
+       * de volta para ' ANTES de o JavaScript ser lido — e ai a string do onclick
+       * fechava no meio. "Rua Sant'Ana" e "Rua D'Avila" existem no Rio, e nelas o
+       * botao simplesmente nao fazia nada. Com dataset nao ha string de JS. */
       alvo.innerHTML = resultados.map(r => `
-        <button type="button" class="sugestao" onclick="escolherEndereco('${escapeHtml(`${r.nome}, ${r.detalhe}`).replace(/'/g, "&#39;")}')">
+        <button type="button" class="sugestao" data-endereco="${escapeHtml(`${r.nome}, ${r.detalhe}`)}"
+                onclick="escolherEndereco(this.dataset.endereco)">
           <strong>${escapeHtml(r.nome)}</strong><span>${escapeHtml(r.detalhe)}</span>
         </button>
       `).join("");
@@ -1795,7 +1801,9 @@ function buscarLojaNoMapa(termo) {
       const { resultados = [], erro } = await (await fetch(`/api/entrega/buscar?q=${encodeURIComponent(termo)}`)).json();
       if (erro) return (alvo.innerHTML = `<p class="form-error">${escapeHtml(erro)}</p>`);
       alvo.innerHTML = resultados.map(r => `
-        <button type="button" class="sugestao" onclick="definirLoja(${r.lng}, ${r.lat}, '${escapeHtml(`${r.nome} ${r.detalhe}`).replace(/'/g, "&#39;")}')">
+        <button type="button" class="sugestao" data-lng="${r.lng}" data-lat="${r.lat}"
+                data-endereco="${escapeHtml(`${r.nome} ${r.detalhe}`)}"
+                onclick="definirLoja(Number(this.dataset.lng), Number(this.dataset.lat), this.dataset.endereco)">
           <strong>${escapeHtml(r.nome)}</strong><span>${escapeHtml(r.detalhe)}</span>
         </button>
       `).join("") || `<p class="faint">Nenhum endereco encontrado.</p>`;
