@@ -3,8 +3,16 @@
  * Os itens viraram linhas proprias. Antes eram um array JSON dentro do pedido,
  * e por isso "mais vendidos do mes" obrigava a carregar todos os pedidos do
  * periodo para dentro do navegador e percorrer na mao. Agora o agrupamento e
- * uma consulta. */
-import { getDb, paraSqlite, deSqlite } from "../db/connection.js";
+ * uma consulta.
+ *
+ * Nota da migracao para o Postgres: `criado_em` agora e TIMESTAMPTZ, e nao mais
+ * texto. Isso corrige de vez um bug que o SQLite escondia — o INSERT gravava
+ * ISO ("2026-08-06T22:29:13.735Z") e os relatorios filtravam com espaco
+ * ("2026-08-06 22:30:43"). Como o SQLite compara data como texto e 'T' > ' ',
+ * `criado_em <= ate` dava falso sempre e o dashboard mostrava zero pedidos
+ * mesmo com a loja vendendo. Agora quem compara e o Postgres, com tipo de data
+ * de verdade. */
+import { todos, um, alteradas, paraBanco, doBanco } from "../db/postgres.js";
 
 const paraApi = (linha, itens = []) => linha && ({
   id: linha.id,
@@ -26,8 +34,8 @@ const paraApi = (linha, itens = []) => linha && ({
   deliveryKm: linha.entrega_km,
   deliveryZone: linha.entrega_faixa,
   total: linha.total,
-  printed: deSqlite(linha.impresso),
-  stockDeducted: deSqlite(linha.estoque_baixado),
+  printed: doBanco(linha.impresso),
+  stockDeducted: doBanco(linha.estoque_baixado),
   createdBy: linha.criado_por,
   createdByName: linha.criado_por_nome ?? null,
   items: itens
@@ -43,12 +51,13 @@ const itemParaApi = linha => ({
 /* Uma consulta para os pedidos e uma para todos os itens desses pedidos.
  * Buscar os itens dentro de um `.map()` faria N+1 consultas — com o movimento
  * de um sabado, o painel abriria centenas delas a cada atualizacao. */
-function anexarItens(linhas) {
+async function anexarItens(linhas) {
   if (!linhas.length) return [];
   const marcadores = linhas.map(() => "?").join(",");
-  const itens = getDb()
-    .prepare(`SELECT * FROM pedido_itens WHERE pedido_id IN (${marcadores}) ORDER BY id`)
-    .all(...linhas.map(linha => linha.id));
+  const itens = await todos(
+    `SELECT * FROM pedido_itens WHERE pedido_id IN (${marcadores}) ORDER BY id`,
+    linhas.map(linha => linha.id)
+  );
 
   const porPedido = new Map();
   for (const item of itens) {
@@ -65,24 +74,26 @@ const SELECT_BASE = `
 `;
 
 export const pedidosRepo = {
-  listar({ desde = null, ate = null, status = null, limite = 500 } = {}) {
-    const linhas = getDb().prepare(`
+  /* Os `::tipo` nos filtros opcionais sao obrigatorios: com o parametro nulo, o
+   * Postgres nao deduz o tipo e recusa a consulta inteira. */
+  async listar({ desde = null, ate = null, status = null, limite = 500 } = {}) {
+    const linhas = await todos(`
       ${SELECT_BASE}
-      WHERE (? IS NULL OR p.criado_em >= ?)
-        AND (? IS NULL OR p.criado_em <= ?)
-        AND (? IS NULL OR p.status = ?)
+      WHERE (?::timestamptz IS NULL OR p.criado_em >= ?::timestamptz)
+        AND (?::timestamptz IS NULL OR p.criado_em <= ?::timestamptz)
+        AND (?::text IS NULL OR p.status = ?::text)
       ORDER BY p.criado_em DESC
       LIMIT ?
-    `).all(desde, desde, ate, ate, status, status, limite);
+    `, [desde, desde, ate, ate, status, status, limite]);
     return anexarItens(linhas);
   },
 
-  listarAbertos() {
-    const linhas = getDb().prepare(`
+  async listarAbertos() {
+    const linhas = await todos(`
       ${SELECT_BASE}
       WHERE p.status IN ('novo', 'preparo', 'pronto')
       ORDER BY p.criado_em ASC
-    `).all();
+    `);
     return anexarItens(linhas);
   },
 
@@ -92,20 +103,21 @@ export const pedidosRepo = {
    * chamada e conferir o pedido. Telefone e endereco ficam de fora: e uma tela
    * virada para o salao inteiro, e quem fotografa a TV nao leva o cadastro de
    * ninguem junto. */
-  listarParaTelao() {
-    const linhas = getDb().prepare(`
+  async listarParaTelao() {
+    const linhas = await todos(`
       SELECT id, cliente, status, criado_em, modalidade
         FROM pedidos
        WHERE status IN ('preparo', 'pronto')
        ORDER BY criado_em ASC
        LIMIT 40
-    `).all();
+    `);
     if (!linhas.length) return [];
 
     const marcadores = linhas.map(() => "?").join(",");
-    const itens = getDb()
-      .prepare(`SELECT pedido_id, nome, quantidade FROM pedido_itens WHERE pedido_id IN (${marcadores}) ORDER BY id`)
-      .all(...linhas.map(linha => linha.id));
+    const itens = await todos(
+      `SELECT pedido_id, nome, quantidade FROM pedido_itens WHERE pedido_id IN (${marcadores}) ORDER BY id`,
+      linhas.map(linha => linha.id)
+    );
 
     const porPedido = new Map();
     for (const item of itens) {
@@ -123,89 +135,104 @@ export const pedidosRepo = {
     }));
   },
 
-  buscar(id) {
-    const linha = getDb().prepare(`${SELECT_BASE} WHERE p.id = ?`).get(id);
+  async buscar(id) {
+    const linha = await um(`${SELECT_BASE} WHERE p.id = ?`, [id]);
     if (!linha) return null;
-    return anexarItens([linha])[0];
+    return (await anexarItens([linha]))[0];
   },
 
-  listarDaMesa(mesaN) {
-    const linhas = getDb().prepare(`${SELECT_BASE} WHERE p.mesa_n = ? AND p.status <> 'cancelado' ORDER BY p.criado_em ASC`).all(mesaN);
+  async listarDaMesa(mesaN) {
+    const linhas = await todos(
+      `${SELECT_BASE} WHERE p.mesa_n = ? AND p.status <> 'cancelado' ORDER BY p.criado_em ASC`,
+      [mesaN]
+    );
     return anexarItens(linhas);
   },
 
   /* Chamado sempre de dentro de emTransacao(): pedido e itens entram juntos ou
-   * nao entram. */
-  inserir(pedido) {
-    const db = getDb();
-    db.prepare(`
+   * nao entram. Os itens vao num INSERT so — um por item seria uma ida a rede
+   * por item, dentro da transacao, com a linha do produto ja travada. */
+  async inserir(pedido) {
+    await alteradas(`
       INSERT INTO pedidos (
         id, criado_em, status, canal, modalidade, cliente, telefone, local, observacao,
         pagamento, troco_para, mesa_n, subtotal, desconto, cupom_code, taxa_entrega, entrega_km,
         entrega_faixa, total, impresso, estoque_baixado, criado_por
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       pedido.id, pedido.createdAt, pedido.status, pedido.channel, pedido.fulfillment,
       pedido.customer, pedido.phone, pedido.place, pedido.note, pedido.payment, pedido.trocoPara ?? null,
       pedido.tableNumber ?? null, pedido.subtotal, pedido.discount, pedido.coupon,
       pedido.deliveryFee, pedido.deliveryKm ?? null, pedido.deliveryZone ?? null,
-      pedido.total, paraSqlite(pedido.printed), paraSqlite(pedido.stockDeducted),
+      pedido.total, paraBanco(pedido.printed), paraBanco(pedido.stockDeducted),
       pedido.createdBy ?? null
-    );
+    ]);
 
-    const inserirItem = db.prepare(`
-      INSERT INTO pedido_itens (pedido_id, produto_id, nome, quantidade, preco_unit)
-      VALUES (?, ?, ?, ?, ?)
-    `);
-    for (const item of pedido.items) {
-      inserirItem.run(pedido.id, item.id, item.name, item.qty, item.price);
+    if (pedido.items.length) {
+      const valores = [];
+      const marcadores = pedido.items.map(item => {
+        valores.push(pedido.id, item.id, item.name, item.qty, item.price);
+        return "(?, ?, ?, ?, ?)";
+      }).join(", ");
+
+      await alteradas(`
+        INSERT INTO pedido_itens (pedido_id, produto_id, nome, quantidade, preco_unit)
+        VALUES ${marcadores}
+      `, valores);
     }
+
     return this.buscar(pedido.id);
   },
 
-  atualizarStatus(id, status) {
-    getDb().prepare("UPDATE pedidos SET status = ?, atualizado_em = datetime('now') WHERE id = ?").run(status, id);
+  async atualizarStatus(id, status) {
+    await alteradas("UPDATE pedidos SET status = ?, atualizado_em = now() WHERE id = ?", [status, id]);
     return this.buscar(id);
   },
 
-  marcarImpresso(id) {
-    getDb().prepare("UPDATE pedidos SET impresso = 1, atualizado_em = datetime('now') WHERE id = ?").run(id);
+  async marcarImpresso(id) {
+    await alteradas("UPDATE pedidos SET impresso = 1, atualizado_em = now() WHERE id = ?", [id]);
   },
 
-  marcarEstoqueDevolvido(id) {
-    getDb().prepare("UPDATE pedidos SET estoque_baixado = 0, atualizado_em = datetime('now') WHERE id = ?").run(id);
+  async marcarEstoqueDevolvido(id) {
+    await alteradas("UPDATE pedidos SET estoque_baixado = 0, atualizado_em = now() WHERE id = ?", [id]);
   },
 
   // ------------------------------------------------------------ relatorios ---
   /* Agregacoes rodam no banco. O dashboard antigo baixava todos os pedidos e
-   * somava em JavaScript a cada troca de periodo. */
-  resumoPeriodo({ desde, ate, canal = null }) {
-    return getDb().prepare(`
-      SELECT COUNT(*) AS pedidos,
+   * somava em JavaScript a cada troca de periodo.
+   *
+   * Os `::int` nos COUNT e SUM de inteiro nao sao decoracao: no Postgres eles
+   * devolvem BIGINT, que chegaria como numero grande e, em SUM de quantidade,
+   * como valor que o front trata como texto na hora de somar. */
+  async resumoPeriodo({ desde, ate, canal = null }) {
+    return await um(`
+      SELECT COUNT(*)::int AS pedidos,
              COALESCE(SUM(total), 0) AS faturamento,
              COALESCE(AVG(total), 0) AS ticket_medio,
              COALESCE(SUM(desconto), 0) AS descontos,
              COALESCE(SUM(taxa_entrega), 0) AS taxas_entrega
         FROM pedidos
-       WHERE criado_em >= ? AND criado_em <= ?
+       WHERE criado_em >= ?::timestamptz AND criado_em <= ?::timestamptz
          AND status <> 'cancelado'
-         AND (? IS NULL OR canal = ?)
-    `).get(desde, ate, canal, canal);
+         AND (?::text IS NULL OR canal = ?::text)
+    `, [desde, ate, canal, canal]);
   },
 
-  porHora({ desde, ate, canal = null }) {
-    return getDb().prepare(`
-      SELECT strftime('%H', criado_em) AS hora,
-             COUNT(*) AS pedidos,
+  /* to_char no lugar do strftime, que so existe no SQLite. Roda no fuso da
+   * sessao (UTC no Supabase), igual ao que o codigo ja assumia. */
+  async porHora({ desde, ate, canal = null }) {
+    return await todos(`
+      SELECT to_char(criado_em, 'HH24') AS hora,
+             COUNT(*)::int AS pedidos,
              COALESCE(SUM(total), 0) AS faturamento
         FROM pedidos
-       WHERE criado_em >= ? AND criado_em <= ? AND status <> 'cancelado'
-         AND (? IS NULL OR canal = ?)
+       WHERE criado_em >= ?::timestamptz AND criado_em <= ?::timestamptz AND status <> 'cancelado'
+         AND (?::text IS NULL OR canal = ?::text)
        GROUP BY hora ORDER BY hora
-    `).all(desde, ate, canal, canal);
+    `, [desde, ate, canal, canal]);
   },
 
-  agruparPor(coluna, { desde, ate, canal = null }) {
+  async agruparPor(coluna, { desde, ate, canal = null }) {
     /* Lista fechada: `coluna` vem do controller e nunca e concatenada sem passar
      * por aqui. Nome de coluna nao pode ser parametro em SQL, entao a unica
      * defesa possivel e a lista branca. */
@@ -213,27 +240,27 @@ export const pedidosRepo = {
     const campo = PERMITIDAS[coluna];
     if (!campo) throw new Error(`agrupamento nao permitido: ${coluna}`);
 
-    return getDb().prepare(`
-      SELECT ${campo} AS rotulo, COUNT(*) AS pedidos, COALESCE(SUM(total), 0) AS faturamento
+    return await todos(`
+      SELECT ${campo} AS rotulo, COUNT(*)::int AS pedidos, COALESCE(SUM(total), 0) AS faturamento
         FROM pedidos
-       WHERE criado_em >= ? AND criado_em <= ? AND status <> 'cancelado'
-         AND (? IS NULL OR canal = ?)
+       WHERE criado_em >= ?::timestamptz AND criado_em <= ?::timestamptz AND status <> 'cancelado'
+         AND (?::text IS NULL OR canal = ?::text)
        GROUP BY ${campo} ORDER BY faturamento DESC
-    `).all(desde, ate, canal, canal);
+    `, [desde, ate, canal, canal]);
   },
 
-  maisVendidos({ desde, ate, canal = null, limite = 10 }) {
-    return getDb().prepare(`
+  async maisVendidos({ desde, ate, canal = null, limite = 10 }) {
+    return await todos(`
       SELECT i.nome AS rotulo,
-             SUM(i.quantidade) AS quantidade,
+             SUM(i.quantidade)::int AS quantidade,
              SUM(i.quantidade * i.preco_unit) AS faturamento
         FROM pedido_itens i
         JOIN pedidos p ON p.id = i.pedido_id
-       WHERE p.criado_em >= ? AND p.criado_em <= ? AND p.status <> 'cancelado'
-         AND (? IS NULL OR p.canal = ?)
+       WHERE p.criado_em >= ?::timestamptz AND p.criado_em <= ?::timestamptz AND p.status <> 'cancelado'
+         AND (?::text IS NULL OR p.canal = ?::text)
        GROUP BY i.nome
        ORDER BY quantidade DESC
        LIMIT ?
-    `).all(desde, ate, canal, canal, limite);
+    `, [desde, ate, canal, canal, limite]);
   }
 };

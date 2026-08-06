@@ -1,5 +1,5 @@
 /* Acesso a tabela `promocoes`. Uma por produto, garantido pelo UNIQUE. */
-import { getDb } from "../db/connection.js";
+import { todos, um, alteradas } from "../db/postgres.js";
 
 const paraApi = linha => linha && ({
   id: linha.id,
@@ -10,33 +10,33 @@ const paraApi = linha => linha && ({
 });
 
 export const promocoesRepo = {
-  listar() {
-    return getDb().prepare("SELECT * FROM promocoes ORDER BY criado_em DESC").all().map(paraApi);
+  async listar() {
+    return (await todos("SELECT * FROM promocoes ORDER BY criado_em DESC")).map(paraApi);
   },
 
   /* Cardapio publico: o preco promocional ja e aplicado na vitrine, entao o
    * cliente so precisa saber qual produto esta em promocao e por quanto. */
-  listarPublico() {
-    return getDb().prepare("SELECT produto_id, preco FROM promocoes").all()
-      .map(linha => ({ productId: linha.produto_id, price: linha.preco }));
+  async listarPublico() {
+    const linhas = await todos("SELECT produto_id, preco FROM promocoes");
+    return linhas.map(linha => ({ productId: linha.produto_id, price: linha.preco }));
   },
 
-  buscarPorProduto(produtoId) {
-    return paraApi(getDb().prepare("SELECT * FROM promocoes WHERE produto_id = ?").get(produtoId));
+  async buscarPorProduto(produtoId) {
+    return paraApi(await um("SELECT * FROM promocoes WHERE produto_id = ?", [produtoId]));
   },
 
   /* Substitui a promocao do produto se ja houver uma. O front antigo fazia isso
    * com `filter` + `unshift` no array inteiro; aqui e o UNIQUE do banco. */
-  salvar({ id, productId, price, until = "" }) {
-    getDb().prepare(`
+  async salvar({ id, productId, price, until = "" }) {
+    return paraApi(await um(`
       INSERT INTO promocoes (id, produto_id, preco, ate)
       VALUES (?, ?, ?, ?)
       ON CONFLICT (produto_id) DO UPDATE SET preco = excluded.preco, ate = excluded.ate
-    `).run(id, productId, price, until);
-    return this.buscarPorProduto(productId);
+      RETURNING *
+    `, [id, productId, price, until]));
   },
 
-  remover(id) {
-    return getDb().prepare("DELETE FROM promocoes WHERE id = ?").run(id).changes > 0;
+  async remover(id) {
+    return (await alteradas("DELETE FROM promocoes WHERE id = ?", [id])) > 0;
   }
 };
