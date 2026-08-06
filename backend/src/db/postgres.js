@@ -19,6 +19,19 @@ import { logger } from "../lib/logger.js";
 
 const { Pool } = pg;
 
+/* BIGINT chega como string, nao como numero.
+ *
+ * O `pg` faz isso de proposito: int8 vai ate 9.2e18 e o Number do JavaScript so
+ * garante inteiro exato ate 9e15, entao converter sozinho perderia precisao em
+ * valores enormes. Acontece que nossos BIGINT sao id de usuario, de pedido_item
+ * e de auditoria — nenhum chega perto disso.
+ *
+ * Sem esta linha, `usuario.id` volta "1" em vez de 1 e todo `===` contra numero
+ * passa a dar falso em silencio: pedido.createdBy === usuario.id, a checagem de
+ * dono de sessao, a comparacao de papel. O SQLite devolvia numero, e e esse o
+ * contrato que a API ja publica para o front. */
+pg.types.setTypeParser(pg.types.builtins.INT8, valor => Number.parseInt(valor, 10));
+
 let pool = null;
 
 /* Onde fica o cliente da transacao em curso.
