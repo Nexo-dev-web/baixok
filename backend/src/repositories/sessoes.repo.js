@@ -5,48 +5,51 @@
  * pendrive, a pasta copiada por e-mail — entrava como balcao sem saber a senha.
  * Com o hash, o arquivo deixa de valer alguma coisa. */
 import { createHash } from "node:crypto";
-import { getDb } from "../db/connection.js";
+import { um, alteradas } from "../db/postgres.js";
 
 export const hashToken = token => createHash("sha256").update(String(token)).digest("hex");
 
 export const sessoesRepo = {
-  criar({ token, csrfToken, usuarioId, expiraEm, ip, agente }) {
-    getDb().prepare(`
+  async criar({ token, csrfToken, usuarioId, expiraEm, ip, agente }) {
+    await alteradas(`
       INSERT INTO sessoes (token_hash, usuario_id, csrf_hash, expira_em, ip, agente)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(hashToken(token), usuarioId, hashToken(csrfToken), expiraEm, ip || null, (agente || "").slice(0, 200));
+    `, [hashToken(token), usuarioId, hashToken(csrfToken), expiraEm, ip || null, (agente || "").slice(0, 200)]);
   },
 
   /* Devolve sessao + usuario numa consulta so, ja filtrando sessao vencida e
    * usuario desativado. Desligar alguem no painel corta o acesso na proxima
-   * requisicao, sem esperar a sessao expirar. */
-  buscarValida(token) {
-    return getDb().prepare(`
+   * requisicao, sem esperar a sessao expirar.
+   *
+   * `expira_em` agora e TIMESTAMPTZ; o servico continua mandando a data como
+   * texto 'AAAA-MM-DD HH:MM:SS' e o Postgres converte na comparacao. */
+  async buscarValida(token) {
+    return await um(`
       SELECT s.token_hash, s.csrf_hash, s.expira_em,
              u.id AS usuario_id, u.usuario, u.nome, u.papel, u.abas_ver, u.abas_editar
         FROM sessoes s
         JOIN usuarios u ON u.id = s.usuario_id
        WHERE s.token_hash = ?
-         AND s.expira_em > datetime('now')
+         AND s.expira_em > now()
          AND u.ativo = 1
-    `).get(hashToken(token)) || null;
+    `, [hashToken(token)]);
   },
 
-  prorrogar(token, expiraEm) {
-    getDb().prepare("UPDATE sessoes SET expira_em = ? WHERE token_hash = ?").run(expiraEm, hashToken(token));
+  async prorrogar(token, expiraEm) {
+    await alteradas("UPDATE sessoes SET expira_em = ? WHERE token_hash = ?", [expiraEm, hashToken(token)]);
   },
 
-  remover(token) {
-    getDb().prepare("DELETE FROM sessoes WHERE token_hash = ?").run(hashToken(token));
+  async remover(token) {
+    await alteradas("DELETE FROM sessoes WHERE token_hash = ?", [hashToken(token)]);
   },
 
   /* Chamado ao trocar senha e ao desativar usuario: derruba todo aparelho onde
    * aquela pessoa estava logada. */
-  removerDoUsuario(usuarioId) {
-    return getDb().prepare("DELETE FROM sessoes WHERE usuario_id = ?").run(usuarioId).changes;
+  async removerDoUsuario(usuarioId) {
+    return await alteradas("DELETE FROM sessoes WHERE usuario_id = ?", [usuarioId]);
   },
 
-  limparVencidas() {
-    return getDb().prepare("DELETE FROM sessoes WHERE expira_em <= datetime('now')").run().changes;
+  async limparVencidas() {
+    return await alteradas("DELETE FROM sessoes WHERE expira_em <= now()");
   }
 };

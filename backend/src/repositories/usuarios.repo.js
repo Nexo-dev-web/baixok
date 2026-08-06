@@ -3,7 +3,7 @@
  * O hash da senha nunca sai daqui em objeto publico: `paraApi` simplesmente nao
  * o inclui, e quem precisa conferir senha usa `buscarPorUsuarioComHash`, que
  * tem nome explicito o bastante para saltar aos olhos numa revisao. */
-import { getDb, paraSqlite, deSqlite } from "../db/connection.js";
+import { todos, um, alteradas, paraBanco, doBanco } from "../db/postgres.js";
 
 const paraLista = valor => {
   if (!valor) return [];
@@ -24,7 +24,7 @@ const paraApi = linha => linha && ({
   usuario: linha.usuario,
   nome: linha.nome,
   papel: linha.papel,
-  ativo: deSqlite(linha.ativo),
+  ativo: doBanco(linha.ativo),
   criadoEm: linha.criado_em,
   ultimoLogin: linha.ultimo_login,
   abasVer: paraLista(linha.abas_ver),
@@ -32,86 +32,94 @@ const paraApi = linha => linha && ({
 });
 
 export const usuariosRepo = {
-  listar() {
-    return getDb().prepare("SELECT * FROM usuarios ORDER BY nome").all().map(paraApi);
+  async listar() {
+    return (await todos("SELECT * FROM usuarios ORDER BY nome")).map(paraApi);
   },
 
-  buscar(id) {
-    return paraApi(getDb().prepare("SELECT * FROM usuarios WHERE id = ?").get(id));
+  async buscar(id) {
+    return paraApi(await um("SELECT * FROM usuarios WHERE id = ?", [id]));
   },
 
-  buscarPorUsuario(usuario) {
-    return paraApi(getDb().prepare("SELECT * FROM usuarios WHERE usuario = ?").get(usuario));
+  /* `usuario` e citext no Postgres, entao a comparacao continua ignorando
+   * maiusculas como o COLLATE NOCASE do SQLite fazia. */
+  async buscarPorUsuario(usuario) {
+    return paraApi(await um("SELECT * FROM usuarios WHERE usuario = ?", [usuario]));
   },
 
-  buscarPorAuthId(authId) {
-    return paraApi(getDb().prepare("SELECT * FROM usuarios WHERE auth_id = ?").get(authId));
+  async buscarPorAuthId(authId) {
+    return paraApi(await um("SELECT * FROM usuarios WHERE auth_id = ?", [authId]));
   },
 
   /* Unico caminho que devolve o hash. Usado so pelo servico de autenticacao. */
-  buscarPorUsuarioComHash(usuario) {
-    return getDb().prepare("SELECT * FROM usuarios WHERE usuario = ?").get(usuario) || null;
+  async buscarPorUsuarioComHash(usuario) {
+    return await um("SELECT * FROM usuarios WHERE usuario = ?", [usuario]);
   },
 
-  criar({ usuario, nome, senhaHash, papel, ativo = true, abasVer = [], abasEditar = [], authId = null }) {
-    const info = getDb().prepare(`
+  /* RETURNING no lugar do lastInsertRowid: o Postgres nao tem rowid, e a coluna
+   * id agora e IDENTITY. */
+  async criar({ usuario, nome, senhaHash, papel, ativo = true, abasVer = [], abasEditar = [], authId = null }) {
+    return paraApi(await um(`
       INSERT INTO usuarios (usuario, nome, senha_hash, papel, ativo, abas_ver, abas_editar, auth_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+      RETURNING *
+    `, [
       usuario,
       nome,
       senhaHash,
       papel,
-      paraSqlite(ativo),
+      paraBanco(ativo),
       JSON.stringify(paraLista(abasVer)),
       JSON.stringify(paraLista(abasEditar)),
       authId
-    );
-    return this.buscar(Number(info.lastInsertRowid));
+    ]));
   },
 
-  atualizar(id, { nome, papel, ativo, abasVer, abasEditar, authId }) {
-    getDb().prepare(`
+  /* Os `::tipo` nos COALESCE nao sao enfeite: quando o parametro chega NULL, o
+   * Postgres nao consegue deduzir o tipo sozinho e recusa a consulta com
+   * "could not determine data type". O SQLite aceitava sem reclamar. */
+  async atualizar(id, { nome, papel, ativo, abasVer, abasEditar, authId }) {
+    return paraApi(await um(`
       UPDATE usuarios
-         SET nome = COALESCE(?, nome),
-             papel = COALESCE(?, papel),
-             ativo = COALESCE(?, ativo),
-             abas_ver = COALESCE(?, abas_ver),
-             abas_editar = COALESCE(?, abas_editar),
-             auth_id = COALESCE(?, auth_id),
-             atualizado_em = datetime('now')
+         SET nome = COALESCE(?::text, nome),
+             papel = COALESCE(?::text, papel),
+             ativo = COALESCE(?::integer, ativo),
+             abas_ver = COALESCE(?::text, abas_ver),
+             abas_editar = COALESCE(?::text, abas_editar),
+             auth_id = COALESCE(?::text, auth_id),
+             atualizado_em = now()
        WHERE id = ?
-    `).run(
+      RETURNING *
+    `, [
       nome ?? null,
       papel ?? null,
-      ativo === undefined ? null : paraSqlite(ativo),
+      ativo === undefined ? null : paraBanco(ativo),
       abasVer === undefined ? null : JSON.stringify(paraLista(abasVer)),
       abasEditar === undefined ? null : JSON.stringify(paraLista(abasEditar)),
       authId ?? null,
       id
-    );
-    return this.buscar(id);
+    ]));
   },
 
-  atualizarAuthId(id, authId) {
+  async atualizarAuthId(id, authId) {
     return this.atualizar(id, { authId });
   },
 
-  trocarSenha(id, senhaHash) {
-    getDb().prepare("UPDATE usuarios SET senha_hash = ?, atualizado_em = datetime('now') WHERE id = ?").run(senhaHash, id);
+  async trocarSenha(id, senhaHash) {
+    await alteradas("UPDATE usuarios SET senha_hash = ?, atualizado_em = now() WHERE id = ?", [senhaHash, id]);
   },
 
-  registrarLogin(id) {
-    getDb().prepare("UPDATE usuarios SET ultimo_login = datetime('now') WHERE id = ?").run(id);
+  async registrarLogin(id) {
+    await alteradas("UPDATE usuarios SET ultimo_login = now() WHERE id = ?", [id]);
   },
 
-  remover(id) {
-    return getDb().prepare("DELETE FROM usuarios WHERE id = ?").run(id).changes > 0;
+  async remover(id) {
+    return (await alteradas("DELETE FROM usuarios WHERE id = ?", [id])) > 0;
   },
 
   /* Impede que o ultimo administrador ativo seja rebaixado ou desligado e
    * deixe o sistema sem ninguem capaz de gerenciar usuarios. */
-  contarAdminsAtivos() {
-    return getDb().prepare("SELECT COUNT(*) AS total FROM usuarios WHERE papel = 'admin' AND ativo = 1").get().total;
+  async contarAdminsAtivos() {
+    const linha = await um("SELECT COUNT(*)::int AS total FROM usuarios WHERE papel = 'admin' AND ativo = 1");
+    return linha.total;
   }
 };

@@ -5,71 +5,78 @@
  * visitante — codigo, valor e ate os desativados. Quem abrisse o devtools no
  * cardapio via a campanha antes de ela ir ao ar. Aqui o cliente so consegue
  * validar um codigo que ele ja digitou. */
-import { getDb, paraSqlite, deSqlite } from "../db/connection.js";
+import { todos, um, alteradas, paraBanco, doBanco } from "../db/postgres.js";
 
 const paraApi = linha => linha && ({
   code: linha.code,
   kind: linha.tipo,
   amount: linha.valor,
   min: linha.minimo,
-  once: deSqlite(linha.uso_unico),
+  once: doBanco(linha.uso_unico),
   until: linha.ate,
   uses: linha.usos,
-  active: deSqlite(linha.ativo),
+  active: doBanco(linha.ativo),
   createdAt: linha.criado_em
 });
 
 export const cuponsRepo = {
   /* Só para o painel. Exige papel admin na rota. */
-  listar() {
-    return getDb().prepare("SELECT * FROM cupons ORDER BY criado_em DESC").all().map(paraApi);
+  async listar() {
+    return (await todos("SELECT * FROM cupons ORDER BY criado_em DESC")).map(paraApi);
   },
 
-  buscar(code) {
-    return paraApi(getDb().prepare("SELECT * FROM cupons WHERE code = ?").get(code));
+  /* `code` e citext no Postgres: BEMVINDO e bemvindo continuam o mesmo cupom,
+   * como o COLLATE NOCASE do SQLite garantia. */
+  async buscar(code) {
+    return paraApi(await um("SELECT * FROM cupons WHERE code = ?", [code]));
   },
 
   /* Usado na validacao vinda do cliente: so devolve cupom ativo, e a busca
    * exige o codigo exato. Nao ha listagem nem prefixo. */
-  buscarAtivo(code) {
-    return paraApi(getDb().prepare("SELECT * FROM cupons WHERE code = ? AND ativo = 1").get(code));
+  async buscarAtivo(code) {
+    return paraApi(await um("SELECT * FROM cupons WHERE code = ? AND ativo = 1", [code]));
   },
 
-  criar({ code, kind, amount, min = 0, once = false, until = "" }) {
-    getDb().prepare(`
+  async criar({ code, kind, amount, min = 0, once = false, until = "" }) {
+    return paraApi(await um(`
       INSERT INTO cupons (code, tipo, valor, minimo, uso_unico, ate)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(code, kind, amount, min, paraSqlite(once), until);
-    return this.buscar(code);
+      RETURNING *
+    `, [code, kind, amount, min, paraBanco(once), until]));
   },
 
-  alternarAtivo(code) {
-    getDb().prepare("UPDATE cupons SET ativo = CASE ativo WHEN 1 THEN 0 ELSE 1 END WHERE code = ?").run(code);
-    return this.buscar(code);
+  async alternarAtivo(code) {
+    return paraApi(await um(`
+      UPDATE cupons SET ativo = CASE ativo WHEN 1 THEN 0 ELSE 1 END WHERE code = ?
+      RETURNING *
+    `, [code]));
   },
 
-  remover(code) {
-    return getDb().prepare("DELETE FROM cupons WHERE code = ?").run(code).changes > 0;
+  async remover(code) {
+    return (await alteradas("DELETE FROM cupons WHERE code = ?", [code])) > 0;
   },
 
-  incrementarUsos(code) {
-    getDb().prepare("UPDATE cupons SET usos = usos + 1 WHERE code = ?").run(code);
+  async incrementarUsos(code) {
+    await alteradas("UPDATE cupons SET usos = usos + 1 WHERE code = ?", [code]);
   },
 
   /* Fecha a limitacao que o README listava como conhecida: "cupom de uso unico
    * por cliente nao e aplicado". O telefone do pedido e a chave possivel sem
    * cadastro de cliente — imperfeita (da para trocar de numero), mas suficiente
    * para o uso acidental repetido, que e o caso real. */
-  jaUsouPorTelefone(code, telefone) {
+  async jaUsouPorTelefone(code, telefone) {
     if (!telefone) return false;
-    const linha = getDb()
-      .prepare("SELECT 1 AS achou FROM cupons_resgatados WHERE cupom_code = ? AND telefone = ? LIMIT 1")
-      .get(code, telefone);
+    const linha = await um(
+      "SELECT 1 AS achou FROM cupons_resgatados WHERE cupom_code = ? AND telefone = ? LIMIT 1",
+      [code, telefone]
+    );
     return Boolean(linha);
   },
 
-  registrarResgate({ code, pedidoId, telefone = "" }) {
-    getDb().prepare("INSERT INTO cupons_resgatados (cupom_code, pedido_id, telefone) VALUES (?, ?, ?)")
-      .run(code, pedidoId, telefone);
+  async registrarResgate({ code, pedidoId, telefone = "" }) {
+    await alteradas(
+      "INSERT INTO cupons_resgatados (cupom_code, pedido_id, telefone) VALUES (?, ?, ?)",
+      [code, pedidoId, telefone]
+    );
   }
 };
