@@ -86,8 +86,9 @@ body.cart-open .shop-layout { padding-right: calc(min(420px, 100vw) + 18px); }
 
 /* â€” cart â€” */
 .cart {
-  position: fixed; top: 74px; right: 0; bottom: 0; z-index: 100; display: grid; align-content: start; gap: 12px;
-  width: min(420px, 100vw); overflow: auto; padding: 16px; border-radius: var(--radius-lg) 0 0 0;
+  position: fixed; top: clamp(62px, 9svh, 78px); right: 0; bottom: 0; z-index: 100; display: grid; align-content: start; gap: 12px;
+  width: min(420px, calc(100vw - 12px)); max-height: calc(100dvh - clamp(62px, 9svh, 78px));
+  overflow: auto; overscroll-behavior: contain; padding: 16px; border-radius: var(--radius-lg) 0 0 0;
   background: var(--panel); box-shadow: var(--shadow-lg); opacity: 0; pointer-events: none;
   transform: translateX(100%); transition: opacity .22s ease, transform .24s cubic-bezier(.2,.8,.2,1);
 }
