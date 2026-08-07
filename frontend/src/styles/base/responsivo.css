@@ -42,15 +42,22 @@
   body[data-page="menu"] .product .primary { width: 30px; min-width: 30px; height: 30px; min-height: 30px; padding: 0; font-size: 0; }
   body[data-page="menu"] .product .primary::before { content: "+"; font-size: 1rem; font-weight: 800; }
   body[data-page="menu"] .cart {
-    top: auto; left: clamp(0px, 2vw, 10px); right: clamp(0px, 2vw, 10px); bottom: 0; width: auto;
-    max-height: min(calc(100dvh - 78px), 720px);
-    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    top: 76px; left: 0; right: 0; bottom: 0; width: auto; height: auto; max-height: none;
+    padding: 14px 14px calc(20px + env(safe-area-inset-bottom, 0px));
     border-radius: var(--radius-md) var(--radius-md) 0 0;
     transform: translateY(100%);
   }
   body[data-page="menu"].cart-open .cart { transform: translateY(0); }
   body[data-page="menu"].cart-open .shop-layout { padding-right: 20px; }
   body[data-page="menu"] .cart-head { border-radius: var(--radius-md) var(--radius-md) 0 0; }
+  body[data-page="menu"] .cart-row { grid-template-columns: 78px minmax(0, 1fr); gap: 12px; padding: 10px; }
+  body[data-page="menu"] .cart-thumb { width: 78px; }
+  body[data-page="menu"] .cart-thumb img, body[data-page="menu"] .cart-thumb .no-photo { width: 78px; height: 78px; min-height: 78px; }
+  body[data-page="menu"] .cart-row .price-row { grid-template-columns: minmax(0, 1fr) auto; }
+  body[data-page="menu"] .cart-row .price-row span { font-size: .9rem; }
+  body[data-page="menu"] .service-mode { border-radius: var(--radius-md); }
+  body[data-page="menu"] .mode-btn { border-radius: var(--radius-sm); }
+  body[data-page="menu"] .pickup-banner { min-height: 44px; font-size: .95rem; }
   body[data-page="menu"] .mobile-cart { display: flex; }
   .section-head { flex-direction: column; }
   .section-head input { max-width: none; }
@@ -74,5 +81,10 @@
   .screen-board > div { padding: 18px; border-radius: var(--radius-md); }
   .support-grid { grid-template-columns: 1fr; }
   .support-head, .support-hero { flex-direction: column; }
+}
+
+@media (min-width: 901px) and (max-width: 1180px) {
+  body[data-page="menu"].cart-open .shop-layout { padding-right: clamp(14px, 4vw, 46px); }
+  body[data-page="menu"] .cart { width: min(420px, calc(100vw - 24px)); }
 }
 
