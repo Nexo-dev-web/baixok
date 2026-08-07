@@ -10,7 +10,7 @@ import { CANAIS_ROTULO, MODALIDADES_ROTULO } from "../../../utils/categorias.js"
 import { apiPedidos, apiRelatorios } from "../../../services/api.js";
 import { toastFalha, toastOk } from "../../../components/toast.js";
 
-const filtros = { periodo: "hoje", canal: "" };
+const filtros = { periodo: "hoje", canal: "", desde: "", ate: "" };
 let ultimoRelatorio = null;
 
 function metrica(rotulo, valor, nota, tom = "") {
@@ -23,11 +23,6 @@ function metrica(rotulo, valor, nota, tom = "") {
 
 function estadoVazioGrafico(mensagem, detalhe) {
   return el("div.chart-empty", {},
-    el("div.chart-empty-bars", {},
-      ...Array.from({ length: 7 }, (_v, indice) =>
-        el("i", { style: { height: `${30 + indice * 6}%`, animationDelay: `${indice * 70}ms` } })
-      )
-    ),
     el("p", {}, mensagem),
     detalhe ? el("span.small.faint", {}, detalhe) : null
   );
@@ -52,6 +47,15 @@ const primeiro = lista => lista?.[0] || null;
 
 function produtoResumo(produto) {
   return produto ? `${produto.rotulo} (${produto.quantidade}x)` : "Sem venda";
+}
+
+function parametrosDashboard() {
+  return {
+    periodo: filtros.periodo,
+    desde: filtros.periodo === "personalizado" ? filtros.desde || undefined : undefined,
+    ate: filtros.periodo === "personalizado" ? filtros.ate || undefined : undefined,
+    canal: filtros.canal || undefined
+  };
 }
 
 function resumoModalidade(porModalidade) {
@@ -93,10 +97,7 @@ function vendaLinha(pedido) {
 
 export async function desenharDashboard() {
   try {
-    ultimoRelatorio = await apiRelatorios.dashboard({
-      periodo: filtros.periodo,
-      canal: filtros.canal || undefined
-    });
+    ultimoRelatorio = await apiRelatorios.dashboard(parametrosDashboard());
   } catch (erro) {
     toastFalha(erro, "Dashboard");
     return;
@@ -193,7 +194,7 @@ export async function desenharDashboard() {
 function exportarPlanilha() {
   if (!ultimoRelatorio) return;
 
-  apiRelatorios.exportar({ periodo: filtros.periodo, canal: filtros.canal || undefined })
+  apiRelatorios.exportar(parametrosDashboard())
     .then(({ linhas, periodo }) => {
       const colunas = ["id", "data", "status", "canal", "modalidade", "cliente", "pagamento", "itens", "subtotal", "desconto", "taxaEntrega", "total"];
       const escapar = valor => `"${String(valor ?? "").replace(/"/g, '""')}"`;
@@ -221,6 +222,10 @@ export function ligarDashboard() {
   const grupo = $("#period-group");
   delegar(grupo, "click", "[data-period]", (_e, botao) => {
     filtros.periodo = botao.dataset.period;
+    filtros.desde = "";
+    filtros.ate = "";
+    $("#filter-from").value = "";
+    $("#filter-to").value = "";
     for (const outro of grupo.querySelectorAll("[data-period]")) {
       outro.classList.toggle("active", outro === botao);
     }
@@ -240,6 +245,17 @@ export function ligarDashboard() {
   }
 
   $("#export-dashboard")?.addEventListener("click", exportarPlanilha);
+
+  $("#apply-period")?.addEventListener("click", () => {
+    const desde = $("#filter-from")?.value || "";
+    const ate = $("#filter-to")?.value || "";
+    if (!desde || !ate) return toastFalha(new Error("Escolha data inicial e final."), "Periodo");
+    filtros.periodo = "personalizado";
+    filtros.desde = desde;
+    filtros.ate = ate;
+    for (const outro of grupo.querySelectorAll("[data-period]")) outro.classList.remove("active");
+    desenharDashboard();
+  });
 
   delegar($("#dashboard-sales"), "click", "[data-action='cancel-sale']", async (_evento, botao) => {
     const linha = botao.closest(".sale-row");
