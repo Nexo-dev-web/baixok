@@ -17,7 +17,7 @@
   body[data-page="menu"] .hero h1 { font-size: 1.6rem; line-height: 1; }
   body[data-page="menu"] .hero h1::after { margin-top: 6px; font-size: .74rem; }
   body[data-page="menu"] .hero p { font-size: .86rem; }
-  body[data-page="menu"] .shop-layout { display: block; padding: 14px clamp(12px, 4vw, 20px) 90px; }
+  body[data-page="menu"] .shop-layout { display: block; padding: 14px clamp(12px, 4vw, 20px) 34px; }
   body[data-page="menu"] .mobile-order-strip, body[data-page="menu"] .experience-strip { display: none; }
   body[data-page="menu"] .signature-strip { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin-bottom: 14px; padding-bottom: 4px; }
   body[data-page="menu"] .signature-strip article { min-width: 260px; min-height: 150px; scroll-snap-align: start; }
@@ -58,7 +58,15 @@
   body[data-page="menu"] .service-mode { border-radius: var(--radius-md); }
   body[data-page="menu"] .mode-btn { border-radius: var(--radius-sm); }
   body[data-page="menu"] .pickup-banner { min-height: 44px; font-size: .95rem; }
-  body[data-page="menu"] .mobile-cart { display: flex; }
+  body[data-page="menu"] .mobile-cart {
+    display: flex;
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+  body[data-page="menu"] .nexo-footer {
+    margin-top: 22px;
+    padding: 24px 22px calc(122px + env(safe-area-inset-bottom, 0px));
+    line-height: 1.45;
+  }
   .section-head { flex-direction: column; }
   .section-head input { max-width: none; }
   .admin-app { padding: 18px 14px 32px; }
