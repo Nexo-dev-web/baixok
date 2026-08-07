@@ -12,8 +12,10 @@
 -- `COLLATE NOCASE` do SQLite. Precisa ser um tipo de verdade (e nao um indice
 -- sobre lower(...)) porque `cupons.code` e chave primaria referenciada por
 -- cupons_resgatados, e chave estrangeira exige unicidade na propria coluna.
--- Instalado no schema `extensions`, que e a convencao do Supabase; o tipo fica
--- qualificado no DDL para o script rodar mesmo com search_path apertado.
+-- O Supabase ja cria o schema `extensions`; um PostgreSQL padrao (como o da
+-- Square Cloud) nao. Criar se ausente mantem a migration portavel nos dois.
+-- O tipo fica qualificado no DDL para rodar mesmo com search_path apertado.
+CREATE SCHEMA IF NOT EXISTS extensions;
 CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA extensions;
 
 -- ---------------------------------------------------------------- pessoas ---

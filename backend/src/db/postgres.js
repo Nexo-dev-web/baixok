@@ -69,8 +69,18 @@ export function abrirPool() {
     throw new Error("DATABASE_CLIENT_CERT_BASE64 invalido: o valor nao contem a chave privada PEM.");
   }
 
+  /* O pg-connection-string da prioridade aos parametros SSL da URL sobre o
+   * objeto `ssl` passado abaixo. A URL fornecida pela Square traz sslmode e,
+   * sem remover esse parametro, cert/key somem silenciosamente e o servidor
+   * responde "connection requires a valid client certificate". Credenciais,
+   * host, porta, banco e quaisquer parametros nao relacionados a TLS ficam. */
+  const urlConexao = new URL(env.SUPABASE_DATABASE_URL);
+  for (const parametro of ["ssl", "sslmode", "sslcert", "sslkey", "sslrootcert"]) {
+    urlConexao.searchParams.delete(parametro);
+  }
+
   pool = new Pool({
-    connectionString: env.SUPABASE_DATABASE_URL,
+    connectionString: urlConexao.toString(),
     /* O Supabase exige TLS. SUPABASE_INSECURE_TLS existe porque a rede da loja
      * intercepta certificado — o mesmo motivo que ja obrigou a flag no resto do
      * projeto. Em producao ela fica desligada e o certificado e conferido. */
@@ -87,7 +97,7 @@ export function abrirPool() {
 
   pool.on("error", erro => logger.error("Erro em conexao ociosa do pool", { erro: erro.message }));
 
-  logger.info("Pool do Postgres aberto");
+  logger.info("Pool do Postgres aberto", { mtls: Boolean(certificadoCliente) });
   return pool;
 }
 
