@@ -285,16 +285,20 @@
     <section class="admin-tab hidden" id="tab-usuarios">
       <div class="tab-guide">
         <strong>Como usar esta aba</strong>
-        <p>Cada pessoa entra com o proprio login do Supabase. <strong>Administrador</strong> mexe em cadastro, precos, cupons, entrega e permissoes; <strong>balcao</strong> ve e edita apenas o que voce liberar.</p>
+        <p>Crie o acesso de cada pessoa aqui. <strong>Administrador</strong> mexe em cadastro, precos, cupons, entrega e permissoes; <strong>caixa</strong> e <strong>cozinha</strong> veem e editam apenas o que voce liberar.</p>
       </div>
       <div class="promo-layout">
         <section class="panel">
           <h2>Quem tem acesso</h2>
-          <p class="small faint">Os usuarios sao criados no Supabase. Aqui voce so ajusta papel, permissao e status de acesso.</p>
+          <p class="small faint">Cadastre um novo acesso ou selecione alguem da lista para ajustar suas permissoes.</p>
           <div class="user-list" id="user-list"></div>
           <form class="panel-divider" id="form-usuario">
-            <strong class="field-label gold" id="user-form-title">Selecione um usuario</strong>
-            <p class="small faint" id="user-form-hint">Os usuarios sao criados no Supabase. Aqui voce ajusta o acesso de quem ja existe.</p>
+            <strong class="field-label gold" id="user-form-title">Novo usuario</strong>
+            <p class="small faint" id="user-form-hint">Use um e-mail valido e uma senha com pelo menos 10 caracteres.</p>
+            <div class="field-row" id="user-credentials">
+              <input id="user-login" type="email" required autocomplete="off" placeholder="E-mail de acesso" maxlength="80">
+              <input id="user-password" type="password" required autocomplete="new-password" placeholder="Senha (minimo 10 caracteres)" minlength="10" maxlength="200">
+            </div>
             <div class="field-row">
               <input id="user-name" required placeholder="Nome da pessoa" maxlength="80">
               <select id="user-role" aria-label="Papel">
@@ -306,7 +310,10 @@
             </div>
             <div class="permission-grid" id="user-permissions"></div>
             <p class="form-error hidden" id="user-error" role="alert"></p>
-            <button class="primary wide" type="submit" id="user-submit">Salvar permissoes</button>
+            <div class="field-row">
+              <button class="primary wide" type="submit" id="user-submit">Criar usuario</button>
+              <button class="secondary hidden" type="button" id="user-cancel">Cancelar edicao</button>
+            </div>
           </form>
         </section>
 
