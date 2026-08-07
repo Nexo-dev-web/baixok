@@ -1,9 +1,8 @@
 /* Endereco de entrega e previa da taxa.
  *
- * Dois caminhos, na ordem de preferencia:
- *   1. Widget oficial da Mapbox, quando ha token publico e a CDN carregou.
- *   2. Busca pelo proprio servidor, que funciona sempre — inclusive com token
- *      secreto, que nunca chega ao navegador.
+ * So um caminho: busca pelo proprio servidor (funciona sempre, inclusive com
+ * token secreto, que nunca chega ao navegador). O widget oficial da Mapbox foi
+ * desligado — ver o comentario em montarWidget() para o motivo.
  *
  * A taxa mostrada aqui e previa. Ao registrar o pedido o servidor geocodifica o
  * endereco de novo e refaz a conta: forjar coordenada no navegador so engana a
@@ -106,45 +105,20 @@ export async function escolherEndereco({ texto, lng, lat }, aoAtualizar) {
   await cotar({ q: texto, lng, lat }, aoAtualizar);
 }
 
-/* Monta o widget da Mapbox se der. Nao dando, a busca pelo servidor continua
- * valendo e o cliente nem percebe a diferenca. */
-export async function montarWidget(aoAtualizar) {
-  const container = $("#endereco-widget");
-  if (!container || widget) return;
-
-  const { configurado, token } = await status();
-  if (!configurado || !token || !window.MapboxGeocoder) return;
-
-  try {
-    widget = new window.MapboxGeocoder({
-      accessToken: token,
-      countries: "br",
-      language: "pt-BR",
-      types: "address,street,place,neighborhood",
-      placeholder: "Rua e numero",
-      marker: false,
-      mapboxgl: null
-    });
-    widget.addTo("#endereco-widget");
-
-    widget.on("result", async evento => {
-      const [lng, lat] = evento.result.center || [];
-      const texto = evento.result.place_name || "";
-      const campo = $("#customer-place");
-      if (campo) campo.value = texto;
-      await cotar({ q: texto, lng, lat }, aoAtualizar);
-    });
-    widget.on("clear", () => {
-      limparCotacao();
-      aoAtualizar?.();
-    });
-
-    /* Com o widget montado, o campo de texto simples vira redundante. */
-    mostrar($("#customer-place"), false);
-  } catch {
-    widget = null;   // CDN bloqueada ou API mudou: segue pelo servidor
-  }
-}
+/* Widget oficial da Mapbox DESLIGADO de proposito.
+ *
+ * A versao anterior so protegia a montagem (sincrona): construir, addTo,
+ * registrar os listeners. Uma falha em tempo real — o cliente digitando e o
+ * widget batendo na Mapbox por conta propria, sem passar pelo nosso servidor —
+ * acontecia fora desse try/catch, sem log, sem fallback, e a essa altura o
+ * campo simples (#customer-place) ja estava escondido. Foi exatamente o que
+ * aconteceu em producao assim que o token ficou valido: parou de mostrar
+ * sugestao nenhuma, sem erro visivel em lugar algum.
+ *
+ * A busca pelo nosso servidor (buscarEndereco, abaixo) e testada e continua
+ * valendo sempre. Ate o widget ganhar um fallback de verdade para falha em
+ * tempo de execucao, ele fica fora — nao ha nada para montar aqui. */
+export async function montarWidget() {}
 
 export function limparWidget() {
   try { widget?.clear(); } catch { /* widget ja descartado */ }
