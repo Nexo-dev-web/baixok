@@ -11,11 +11,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700;800&family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="/assets/admin-DVLxJ0cj.js"></script>
+  <script type="module" crossorigin src="/assets/admin-CkkH6T_f.js"></script>
   <link rel="modulepreload" crossorigin href="/assets/api-DEKr3VnT.js">
-  <link rel="modulepreload" crossorigin href="/assets/toast-C7NsVVt1.js">
+  <link rel="modulepreload" crossorigin href="/assets/toast-BeiLEQAS.js">
   <link rel="modulepreload" crossorigin href="/assets/categorias-18bNbi7R.js">
-  <link rel="stylesheet" crossorigin href="/assets/admin-BlEIbJA1.css">
+  <link rel="stylesheet" crossorigin href="/assets/admin-56WZUNJR.css">
 </head>
 <body data-page="admin">
   <div class="aviso-offline" role="alert">Sem conexao com o servidor. As alteracoes nao estao sendo salvas.</div>
@@ -226,6 +226,11 @@
           <button class="period-btn" type="button" data-period="30dias">30 dias</button>
           <button class="period-btn" type="button" data-period="mes">Este mes</button>
         </div>
+        <div class="custom-period" id="custom-period">
+          <label><span>De</span><input id="filter-from" type="date"></label>
+          <label><span>Ate</span><input id="filter-to" type="date"></label>
+          <button class="secondary small" type="button" id="apply-period">Aplicar</button>
+        </div>
         <select id="filter-channel" aria-label="Filtrar por canal"></select>
         <button class="primary export-btn" type="button" id="export-dashboard">⇩ Exportar planilha</button>
       </div>
@@ -234,10 +239,16 @@
 
       <div class="dashboard-columns">
         <div class="chart-card">
+          <h2>Vendas por dia</h2>
+          <div id="day-chart"></div>
+        </div>
+        <div class="chart-card">
           <h2>Faturamento por canal</h2>
           <div id="channel-chart"></div>
           <h2 class="chart-subhead">Formas de pagamento</h2>
           <div id="payment-chart"></div>
+          <h2 class="chart-subhead">Retirada, entrega e loja</h2>
+          <div id="fulfillment-chart"></div>
         </div>
         <div class="chart-card">
           <h2>Movimento por hora</h2>
@@ -246,11 +257,23 @@
         <div class="chart-card">
           <h2>Mais vendidos</h2>
           <div id="best-items"></div>
+          <h2 class="chart-subhead">Menos vendidos</h2>
+          <div id="worst-items"></div>
         </div>
         <div class="chart-card">
           <h2>Alerta de estoque</h2>
           <div id="stock-alert-chart"></div>
         </div>
+      </div>
+
+      <div class="panel all-sales-card">
+        <div class="sales-head">
+          <div>
+            <h2>Todas as vendas</h2>
+            <p class="small faint">Confira pedidos do periodo e cancele lancamentos errados.</p>
+          </div>
+        </div>
+        <div class="sales-list" id="dashboard-sales"></div>
       </div>
     </section>
 
@@ -267,23 +290,18 @@
     <section class="admin-tab hidden" id="tab-usuarios">
       <div class="tab-guide">
         <strong>Como usar esta aba</strong>
-        <p>Crie um acesso individual para cada pessoa. <strong>Administrador</strong> mexe em cadastro, precos, cupons, entrega e permissoes; <strong>caixa</strong> e <strong>cozinha</strong> acessam apenas o que voce liberar.</p>
+        <p>Cada pessoa entra com o proprio login do Supabase. <strong>Administrador</strong> mexe em cadastro, precos, cupons, entrega e permissoes; <strong>balcao</strong> ve e edita apenas o que voce liberar.</p>
       </div>
       <div class="promo-layout">
         <section class="panel">
           <h2>Quem tem acesso</h2>
-          <p class="small faint">Crie, edite, desative e redefina a senha dos acessos da equipe.</p>
-          <button class="ghost small" type="button" id="new-user">+ Novo usuario</button>
+          <p class="small faint">Os usuarios sao criados no Supabase. Aqui voce so ajusta papel, permissao e status de acesso.</p>
           <div class="user-list" id="user-list"></div>
           <form class="panel-divider" id="form-usuario">
-            <strong class="field-label gold" id="user-form-title">Novo usuario</strong>
-            <p class="small faint" id="user-form-hint">Informe login, senha inicial, papel e permissoes.</p>
+            <strong class="field-label gold" id="user-form-title">Selecione um usuario</strong>
+            <p class="small faint" id="user-form-hint">Os usuarios sao criados no Supabase. Aqui voce ajusta o acesso de quem ja existe.</p>
             <div class="field-row">
               <input id="user-name" required placeholder="Nome da pessoa" maxlength="80">
-              <input id="user-login" required placeholder="Login (ex.: joao.caixa)" maxlength="50" autocomplete="username">
-            </div>
-            <div class="field-row">
-              <input id="user-password" type="password" required placeholder="Senha (minimo 10 caracteres)" minlength="10" maxlength="200" autocomplete="new-password">
               <select id="user-role" aria-label="Papel">
                 <option value="caixa">Caixa</option>
                 <option value="cozinha">Cozinha</option>
@@ -292,7 +310,7 @@
             </div>
             <div class="permission-grid" id="user-permissions"></div>
             <p class="form-error hidden" id="user-error" role="alert"></p>
-            <button class="primary wide" type="submit" id="user-submit">Criar usuario</button>
+            <button class="primary wide" type="submit" id="user-submit">Salvar permissoes</button>
           </form>
         </section>
 
@@ -313,7 +331,15 @@
         <p>Balcao ou venda de outra plataforma (iFood, WhatsApp...). Consolida o faturamento no dashboard.</p>
       </div>
       <div class="chip-row" id="manual-channels"></div>
+      <div class="manual-section hidden" id="manual-fulfillment-section">
+        <span class="field-label">Tipo do pedido</span>
+        <div class="chip-row" id="manual-fulfillment"></div>
+      </div>
       <input id="manual-customer" placeholder="Nome do cliente (opcional)" maxlength="80">
+      <div class="manual-section hidden" id="manual-delivery-fields">
+        <input id="manual-phone" placeholder="Telefone do cliente" inputmode="tel" maxlength="30">
+        <input id="manual-address" placeholder="Endereco de entrega" maxlength="160">
+      </div>
       <div class="chip-row" id="manual-payments"></div>
       <label class="change-field hidden" id="manual-change-field">
         <span>Troco para quanto?</span>

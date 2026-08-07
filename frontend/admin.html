@@ -221,6 +221,11 @@
           <button class="period-btn" type="button" data-period="30dias">30 dias</button>
           <button class="period-btn" type="button" data-period="mes">Este mes</button>
         </div>
+        <div class="custom-period" id="custom-period">
+          <label><span>De</span><input id="filter-from" type="date"></label>
+          <label><span>Ate</span><input id="filter-to" type="date"></label>
+          <button class="secondary small" type="button" id="apply-period">Aplicar</button>
+        </div>
         <select id="filter-channel" aria-label="Filtrar por canal"></select>
         <button class="primary export-btn" type="button" id="export-dashboard">⇩ Exportar planilha</button>
       </div>
@@ -328,7 +333,15 @@
         <p>Balcao ou venda de outra plataforma (iFood, WhatsApp...). Consolida o faturamento no dashboard.</p>
       </div>
       <div class="chip-row" id="manual-channels"></div>
+      <div class="manual-section hidden" id="manual-fulfillment-section">
+        <span class="field-label">Tipo do pedido</span>
+        <div class="chip-row" id="manual-fulfillment"></div>
+      </div>
       <input id="manual-customer" placeholder="Nome do cliente (opcional)" maxlength="80">
+      <div class="manual-section hidden" id="manual-delivery-fields">
+        <input id="manual-phone" placeholder="Telefone do cliente" inputmode="tel" maxlength="30">
+        <input id="manual-address" placeholder="Endereco de entrega" maxlength="160">
+      </div>
       <div class="chip-row" id="manual-payments"></div>
       <label class="change-field hidden" id="manual-change-field">
         <span>Troco para quanto?</span>
