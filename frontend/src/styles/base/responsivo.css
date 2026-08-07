@@ -1,0 +1,78 @@
+﻿/* Ajustes por largura de tela. Compartilhado de proposito: o bloco original mistura regras de menu e painel, e separa-lo exigiria reescrever seletores - risco de regressao visual sem ganho real. */
+
+@media (max-width: 900px) {
+  body[data-page="menu"] { width: 100%; min-width: 0; margin: 0; }
+  body[data-page="menu"] .topbar { position: sticky; padding: 12px 20px 8px; background: var(--shell); }
+  body[data-page="menu"] .brand img { width: 40px; height: 40px; }
+  body[data-page="menu"] .brand strong { font-size: 1rem; }
+  body[data-page="menu"] .brand span { font-size: .76rem; }
+  body[data-page="menu"] .top-actions .secondary { display: none; }
+  body[data-page="menu"] .hero {
+    grid-template-columns: 1fr; min-height: 190px; margin: 10px 20px 10px; padding: 18px; border-radius: var(--radius-lg);
+    background: linear-gradient(180deg, rgba(16,14,12,0) 20%, rgba(16,14,12,.94) 100%), url("/images/loja-baixo-k-hero.png") center/cover;
+  }
+  body[data-page="menu"] .hero-mark, body[data-page="menu"] .venue-card, body[data-page="menu"] .hero-actions { display: none; }
+  body[data-page="menu"] .hero-copy { align-self: end; max-width: none; gap: 5px; padding: 0; }
+  body[data-page="menu"] .hero .live-badge { padding: 5px 12px; font-size: .68rem; }
+  body[data-page="menu"] .hero h1 { font-size: 1.6rem; line-height: 1; }
+  body[data-page="menu"] .hero h1::after { margin-top: 6px; font-size: .74rem; }
+  body[data-page="menu"] .hero p { font-size: .86rem; }
+  body[data-page="menu"] .shop-layout { display: block; padding: 14px clamp(12px, 4vw, 20px) 90px; }
+  body[data-page="menu"] .mobile-order-strip, body[data-page="menu"] .experience-strip { display: none; }
+  body[data-page="menu"] .signature-strip { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin-bottom: 14px; padding-bottom: 4px; }
+  body[data-page="menu"] .signature-strip article { min-width: 260px; min-height: 150px; scroll-snap-align: start; }
+  body[data-page="menu"] .signature-strip img, body[data-page="menu"] .signature-strip .no-photo { min-height: 150px; }
+  body[data-page="menu"] .signature-strip strong { font-size: 1rem; }
+  body[data-page="menu"] .signature-strip em { display: none; }
+  body[data-page="menu"] .menu-shell { padding: 0; border: 0; background: transparent; box-shadow: none; }
+  body[data-page="menu"] .menu-shell .section-head { margin: 0 0 12px; padding: 0; border: 0; background: transparent; }
+  body[data-page="menu"] .menu-shell .section-head .eyebrow, body[data-page="menu"] .menu-shell .section-head p { display: none; }
+  body[data-page="menu"] .menu-shell .section-head h2 { font-size: 1.15rem; }
+  body[data-page="menu"] .menu-shell .section-head input { max-width: none; }
+  body[data-page="menu"] .filters { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 8px; }
+  body[data-page="menu"] .filter { white-space: nowrap; min-height: 38px; }
+  body[data-page="menu"] .menu-grid { display: flex; flex-direction: column; gap: 11px; }
+  body[data-page="menu"] .product { grid-template-columns: 82px minmax(0, 1fr); min-height: 104px; border-radius: var(--radius-md); }
+  body[data-page="menu"] .product img, body[data-page="menu"] .product .no-photo { min-height: 104px; border-radius: var(--radius-md) 0 0 var(--radius-md); }
+  body[data-page="menu"] .product .badge, body[data-page="menu"] .product .stock-chip { display: none; }
+  body[data-page="menu"] .product-body { padding: 10px 11px; gap: 4px; }
+  body[data-page="menu"] .product strong { font-size: .94rem; }
+  body[data-page="menu"] .product p { font-size: .78rem; -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+  body[data-page="menu"] .product .price-row span { font-size: .95rem; }
+  body[data-page="menu"] .product .primary { width: 30px; min-width: 30px; height: 30px; min-height: 30px; padding: 0; font-size: 0; }
+  body[data-page="menu"] .product .primary::before { content: "+"; font-size: 1rem; font-weight: 800; }
+  body[data-page="menu"] .cart {
+    top: auto; left: clamp(0px, 2vw, 10px); right: clamp(0px, 2vw, 10px); bottom: 0; width: auto;
+    max-height: min(calc(100dvh - 78px), 720px);
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    transform: translateY(100%);
+  }
+  body[data-page="menu"].cart-open .cart { transform: translateY(0); }
+  body[data-page="menu"].cart-open .shop-layout { padding-right: 20px; }
+  body[data-page="menu"] .cart-head { border-radius: var(--radius-md) var(--radius-md) 0 0; }
+  body[data-page="menu"] .mobile-cart { display: flex; }
+  .section-head { flex-direction: column; }
+  .section-head input { max-width: none; }
+  .admin-app { padding: 18px 14px 32px; }
+  .page-head { flex-direction: column; gap: 14px; }
+  .page-head-copy { min-width: 0; }
+  .mini-metrics { width: 100%; }
+  .mini-metric { flex: 1; min-width: 0; padding: 14px 18px; }
+  .panel-form { position: static; }
+  .shop-layout, .dashboard-columns, .screen-board, .kanban, .kds-board, .products-layout, .promo-layout, .dashboard-grid, .experience-strip { grid-template-columns: 1fr; }
+  .product-row, .order-row { grid-template-columns: 56px minmax(0, 1fr); row-gap: 6px; }
+  .product-row > span:nth-child(n + 3), .order-row > span:nth-child(n + 3) { grid-column: 2; }
+  .product-row .row-actions, .order-row .right { grid-column: 1 / -1; justify-content: flex-start; text-align: left; }
+  .data-head { display: none; }
+  .filter-bar select, .period-group { width: 100%; }
+  .period-btn { flex: 1; }
+  .export-btn { margin-left: 0; width: 100%; }
+  .screen-page { padding: 18px 14px; }
+  .screen-header { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .screen-board { gap: 14px; }
+  .screen-board > div { padding: 18px; border-radius: var(--radius-md); }
+  .support-grid { grid-template-columns: 1fr; }
+  .support-head, .support-hero { flex-direction: column; }
+}
+

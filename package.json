@@ -1,0 +1,30 @@
+{
+  "name": "baixok",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Sistema Baixo K - cardapio digital, comanda de mesa, KDS, estoque e telao",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "comentario-engines": "Era >=22.5 por causa do node:sqlite, que so existe a partir dessa versao. Com o banco no Postgres (backend/src/db/postgres.js) essa amarra sumiu; o piso agora e o 20.11, primeira LTS onde tudo o que o codigo usa — import.meta.dirname, fetch, AsyncLocalStorage, node:test — esta estavel.",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run dev --workspace backend",
+    "dev:web": "npm run dev --workspace frontend",
+    "build": "npm run build --workspace frontend",
+    "start": "npm run start --workspace backend",
+    "migrate": "npm run migrate --workspace backend",
+    "seed": "npm run seed --workspace backend",
+    "import:legado": "npm run import:legado --workspace backend",
+    "test": "npm run test --workspace backend",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "eslint": "^9.18.0"
+  }
+}

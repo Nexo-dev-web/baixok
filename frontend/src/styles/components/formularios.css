@@ -1,0 +1,9 @@
+﻿/* Campos de formulario e mensagem de erro. */
+
+.field-row { display: flex; gap: 8px; align-items: center; }
+.field-row > * { min-width: 0; }
+.field-label { display: block; margin-bottom: 7px; color: var(--muted); font-size: .78rem; font-weight: 700; }
+.field-label.gold { color: var(--gold); }
+.form-error { color: var(--danger); font-size: .78rem; font-weight: 600; }
+.panel-divider { display: grid; gap: 9px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line-soft); }
+

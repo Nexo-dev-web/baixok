@@ -1,0 +1,108 @@
+/* Definicao das abas do painel.
+ *
+ * `abasVer` e `abasEditar` permitem ajustar o que cada usuario enxerga sem
+ * depender apenas do papel. O backend continua validando tudo na API; aqui a
+ * regra serve para esconder o que nao deve aparecer e evitar clique indevido.
+ */
+
+const PAPEL_PADRAO_VER = Object.freeze({
+  admin: ["pedidos", "mesas", "produtos", "promos", "entrega", "estoque", "dashboard", "plano", "usuarios"],
+  caixa: ["pedidos", "mesas", "estoque"],
+  cozinha: ["pedidos"]
+});
+
+const PAPEL_PADRAO_EDITAR = Object.freeze({
+  admin: ["pedidos", "mesas", "produtos", "promos", "entrega", "estoque", "dashboard", "plano", "usuarios"],
+  caixa: ["pedidos", "mesas", "estoque"],
+  cozinha: []
+});
+
+export const ABAS = Object.freeze({
+  pedidos: {
+    titulo: "Fila de pedidos",
+    subtitulo: "Tudo que entra pelo cardapio, WhatsApp ou lancamento manual.",
+    icone: "☰",
+    rotulo: "Pedidos",
+    papeis: ["admin", "caixa", "cozinha"]
+  },
+  mesas: {
+    titulo: "Mesas do salao",
+    subtitulo: "Comanda por mesa com QR code, parcial e fechamento de conta.",
+    icone: "▪",
+    rotulo: "Mesas (salao)",
+    papeis: ["admin", "caixa"]
+  },
+  produtos: {
+    titulo: "Produtos",
+    subtitulo: "Cardapio que o cliente ve. Pausar tira do ar sem apagar o cadastro.",
+    icone: "◱",
+    rotulo: "Produtos",
+    papeis: ["admin"]
+  },
+  promos: {
+    titulo: "Promocoes e cupons",
+    subtitulo: "Preco promocional e cupons de desconto.",
+    icone: "✦",
+    rotulo: "Promocoes",
+    papeis: ["admin"]
+  },
+  entrega: {
+    titulo: "Area de entrega",
+    subtitulo: "Ponto da loja e faixas de raio com taxa e pedido minimo.",
+    icone: "◈",
+    rotulo: "Area de entrega",
+    papeis: ["admin"]
+  },
+  estoque: {
+    titulo: "Estoque",
+    subtitulo: "Contador por produto. Item zerado sai do cardapio sozinho.",
+    icone: "▤",
+    rotulo: "Estoque",
+    papeis: ["admin", "caixa"]
+  },
+  dashboard: {
+    titulo: "Dashboard",
+    subtitulo: "Faturamento, movimento por hora e mais vendidos.",
+    icone: "◔",
+    rotulo: "Dashboard",
+    papeis: ["admin", "caixa"]
+  },
+  plano: {
+    titulo: "Plano do sistema",
+    subtitulo: "Valor da mensalidade, vencimento e dias restantes.",
+    icone: "PL",
+    rotulo: "Plano do sistema",
+    papeis: ["admin"]
+  },
+  usuarios: {
+    titulo: "Usuarios e auditoria",
+    subtitulo: "Quem tem acesso, o que pode ver/editar, e o registro do que foi feito.",
+    icone: "◍",
+    rotulo: "Usuarios",
+    papeis: ["admin"]
+  }
+});
+
+export const abasDoPapel = papel =>
+  Object.entries(ABAS).filter(([, aba]) => aba.papeis.includes(papel));
+
+function listaPermitida(usuario, tipo) {
+  const chave = tipo === "editar" ? "abasEditar" : "abasVer";
+  const lista = usuario?.[chave];
+  if (Array.isArray(lista) && lista.length) return lista;
+  return tipo === "editar"
+    ? PAPEL_PADRAO_EDITAR[usuario?.papel] || []
+    : PAPEL_PADRAO_VER[usuario?.papel] || [];
+}
+
+export function abaInicial(usuario) {
+  return listaPermitida(usuario, "ver")[0] || "pedidos";
+}
+
+export function podeVer(aba, usuario) {
+  return listaPermitida(usuario, "ver").includes(aba);
+}
+
+export function podeEditar(aba, usuario) {
+  return listaPermitida(usuario, "editar").includes(aba);
+}

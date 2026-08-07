@@ -1,0 +1,48 @@
+/* Estilos que nao existiam no arquivo unico.
+ *
+ * Sao poucos, e todos vieram de coisas que passaram a existir na refatoracao:
+ * indicador de conexao, variantes de aviso e o rotulo dos campos do login. */
+
+/* — indicador de conexao do telao —
+ * A TV fica sozinha no salao. Sem este ponto, wifi caido deixava a fila
+ * congelada na tela sem nenhum sinal de que tinha parado de atualizar. */
+.screen-status {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--muted); font-size: .78rem; font-weight: 600;
+}
+.screen-status::before {
+  content: ""; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--muted); transition: background .2s ease;
+}
+.screen-status.conectado::before { background: var(--green); }
+.screen-status.desconectado::before { background: var(--danger); animation: bkpulse 1.6s infinite; }
+
+/* — variantes do aviso flutuante — */
+.toast-erro { border-color: rgba(212,127,110,.5); color: var(--danger); }
+.toast-ok { border-color: rgba(143,174,109,.5); color: var(--green); }
+
+/* — campos rotulados da tela de login — */
+.campo { display: grid; gap: 6px; width: 100%; text-align: left; color: var(--muted); font-size: .8rem; font-weight: 600; }
+
+/* — placeholder de foto —
+ * Estava so como seletor descendente (.product .no-photo, .signature-strip
+ * .no-photo). O painel usa a mesma marcacao e ficava sem estilo nenhum. */
+.no-photo {
+  display: grid; place-content: center; gap: 2px; padding: 10px;
+  color: var(--faint); text-align: center; font-size: .74rem; line-height: 1.3;
+  background: var(--soft); border-radius: inherit;
+}
+.no-photo small { font-size: .66rem; opacity: .8; }
+
+/* — indicador de carregamento nas listas do painel — */
+.carregando { padding: 24px; color: var(--faint); font-size: .84rem; text-align: center; }
+
+/* — faixa de aviso quando o painel perde o servidor —
+ * Substitui o comportamento antigo de cair calado para o localStorage e seguir
+ * como se estivesse tudo certo. */
+.aviso-offline {
+  position: sticky; top: 0; z-index: 30; display: none;
+  padding: 10px 18px; text-align: center; font-size: .82rem; font-weight: 700;
+  color: var(--danger); background: var(--danger-bg); border-bottom: 1.5px solid rgba(212,127,110,.45);
+}
+body.sem-conexao .aviso-offline { display: block; }

@@ -1,0 +1,168 @@
+/* Fila de pedidos (kanban).
+ *
+ * A ordem das colunas continua a mesma, e o arrastar entre colunas foi mantido.
+ * Cada acao virou uma chamada a API: o painel nao muda mais o proprio banco
+ * local e torce para o servidor concordar depois. */
+import { el, render, $, delegar } from "../../../utils/dom.js";
+import { reais, minutosDesde, esperaLegivel } from "../../../utils/formato.js";
+import { CANAIS_ROTULO, MODALIDADES_ROTULO } from "../../../utils/categorias.js";
+import { apiPedidos } from "../../../services/api.js";
+import { estado, carregar } from "../store.js";
+import { toast, toastFalha } from "../../../components/toast.js";
+import { imprimirAmbas, imprimirTeste } from "../../../components/impressao.js";
+
+const MINUTOS_ATRASO = 15;
+
+const COLUNAS = [
+  ["novo", "Aguardando aprovacao"],
+  ["preparo", "Em preparo"],
+  ["pronto", "Pronto / A caminho"],
+  ["entregue", "Entregue"]
+];
+
+const senha = pedido => String(pedido.id).slice(-3).toUpperCase();
+const porChegada = lista => [...lista].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+/* A cozinha ve a fila e avanca o preparo, mas nao recusa nem reimprime nota do
+ * balcao. A rota tambem barra — isto aqui e para nao oferecer o botao. */
+function acoes(pedido, papel) {
+  const podeOperar = papel === "admin" || papel === "caixa";
+
+  if (pedido.status === "novo") {
+    return [
+      el("button.primary.small", { type: "button", dataset: { acao: "aprovar", id: pedido.id } }, "Aprovar e imprimir"),
+      podeOperar ? el("button.danger.small", { type: "button", dataset: { acao: "recusar", id: pedido.id } }, "Recusar") : null
+    ];
+  }
+  if (pedido.status === "preparo") {
+    return [
+      el("button.primary.small", { type: "button", dataset: { acao: "status", id: pedido.id, status: "pronto" } },
+        pedido.fulfillment === "retirada" ? "Pronto - chamar no telao" : "Despachar entrega"),
+      podeOperar ? el("button.secondary.small", { type: "button", dataset: { acao: "reimprimir", id: pedido.id } }, "Reimprimir") : null
+    ];
+  }
+  if (pedido.status === "pronto") {
+    return [el("button.ghost-green.small", { type: "button", dataset: { acao: "status", id: pedido.id, status: "entregue" } }, "Marcar entregue")];
+  }
+  return [];
+}
+
+function cartao(pedido, papel) {
+  const espera = minutosDesde(pedido.createdAt);
+  const prioridade = pedido.status === "entregue"
+    ? "normal"
+    : espera >= MINUTOS_ATRASO * 2 ? "urgent" : espera >= MINUTOS_ATRASO ? "attention" : "normal";
+
+  return el("article.order-card", {
+    class: `status-${pedido.status} priority-${prioridade}`,
+    draggable: papel !== "cozinha",
+    dataset: { id: pedido.id }
+  },
+    el("div.order-top", {},
+      el("strong.order-num", {}, `#${senha(pedido)}`),
+      el("strong.order-customer", {}, pedido.customer),
+      el("strong.order-total", {}, reais(pedido.total))
+    ),
+    el("div.order-flags", {},
+      el("span.flag", {}, CANAIS_ROTULO[pedido.channel] || pedido.channel),
+      el("span.flag", {}, MODALIDADES_ROTULO[pedido.fulfillment] || pedido.fulfillment),
+      el("span.flag", { class: /pix/i.test(pedido.payment || "") ? "paid" : "" }, pedido.payment || "-"),
+      el("span.flag.time", {}, esperaLegivel(espera))
+    ),
+    el("p.order-items-line", {}, pedido.items.map(item => `${item.qty}x ${item.name}`).join("  ·  ")),
+    pedido.note ? el("p.order-note", {}, el("strong", {}, "Obs: "), pedido.note) : null,
+    /* Telefone e endereco so para quem opera o balcao. O tablet da cozinha
+     * costuma ficar num lugar de passagem. */
+    papel === "cozinha"
+      ? null
+      : el("p.order-place", {}, `${pedido.place || ""}${pedido.phone ? ` | ${pedido.phone}` : ""}`),
+    pedido.printed
+      ? el("div.order-flags", {}, el("span.flag.done", {}, "🖨 Cozinha ✓"), el("span.flag.done", {}, "🖨 Balcao ✓"))
+      : null,
+    el("div.order-actions", {}, ...acoes(pedido, papel))
+  );
+}
+
+export function desenharPedidos() {
+  const alvo = $("#orders-kanban");
+  if (!alvo) return;
+
+  const papel = estado.usuario?.papel;
+  const pedidos = estado.pedidos.filter(pedido => pedido.status !== "cancelado");
+
+  render(alvo, ...COLUNAS.map(([status, titulo]) => {
+    const linhas = porChegada(pedidos.filter(pedido => pedido.status === status));
+    return el("div.kanban-column", { class: `status-zone-${status}`, dataset: { status } },
+      el("h2", {}, titulo, " ", el("span", {}, String(linhas.length))),
+      linhas.length ? linhas.map(pedido => cartao(pedido, papel)) : el("p.faint", {}, "Nenhum pedido aqui.")
+    );
+  }));
+
+  const badge = $("#nav-badge");
+  if (badge) {
+    const novos = pedidos.filter(pedido => pedido.status === "novo").length;
+    badge.textContent = String(novos);
+    badge.classList.toggle("hidden", novos === 0);
+  }
+}
+
+async function mudarStatus(id, status) {
+  try {
+    const { pedido } = await apiPedidos.mudarStatus(id, status);
+    /* Aprovar imprime as duas vias, como antes: cozinha monta, balcao entrega. */
+    if (status === "preparo") {
+      imprimirAmbas(pedido);
+      await apiPedidos.marcarImpresso(id).catch(() => {});
+    }
+    await carregar("pedidos", "produtos");
+    desenharPedidos();
+  } catch (erro) {
+    toastFalha(erro);
+  }
+}
+
+async function recusar(id) {
+  const pedido = estado.pedidos.find(item => item.id === id);
+  if (!confirm(`Recusar o pedido de ${pedido?.customer || "cliente"}? Os itens voltam para o estoque.`)) return;
+
+  const motivo = prompt("Motivo da recusa (fica registrado):", "") ?? "";
+  try {
+    await apiPedidos.cancelar(id, motivo);
+    await carregar("pedidos", "produtos");
+    desenharPedidos();
+    toast("Pedido recusado e estoque devolvido.");
+  } catch (erro) {
+    toastFalha(erro);
+  }
+}
+
+export function ligarPedidos() {
+  const alvo = $("#orders-kanban");
+  if (!alvo) return;
+
+  delegar(alvo, "click", "[data-acao='aprovar']", (_e, botao) => mudarStatus(botao.dataset.id, "preparo"));
+  delegar(alvo, "click", "[data-acao='status']", (_e, botao) => mudarStatus(botao.dataset.id, botao.dataset.status));
+  delegar(alvo, "click", "[data-acao='recusar']", (_e, botao) => recusar(botao.dataset.id));
+  delegar(alvo, "click", "[data-acao='reimprimir']", (_e, botao) => {
+    const pedido = estado.pedidos.find(item => item.id === botao.dataset.id);
+    if (pedido) imprimirAmbas(pedido);
+  });
+
+  /* Arrastar entre colunas, para frente ou para tras, para corrigir status. */
+  delegar(alvo, "dragstart", ".order-card", (evento, cartaoNode) => {
+    evento.dataTransfer.setData("text/plain", cartaoNode.dataset.id);
+    evento.dataTransfer.effectAllowed = "move";
+  });
+  delegar(alvo, "dragover", ".kanban-column", evento => {
+    evento.preventDefault();
+    evento.dataTransfer.dropEffect = "move";
+  });
+  delegar(alvo, "drop", ".kanban-column", (evento, coluna) => {
+    evento.preventDefault();
+    const id = evento.dataTransfer.getData("text/plain");
+    if (id) mudarStatus(id, coluna.dataset.status);
+  });
+
+  $("#print-test-kitchen")?.addEventListener("click", () => imprimirTeste("kitchen"));
+  $("#print-test-counter")?.addEventListener("click", () => imprimirTeste("counter"));
+}

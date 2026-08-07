@@ -1,0 +1,40 @@
+﻿/* Telao do salao. */
+
+/* â€” telÃ£o / kitchen screen â€” */
+.screen-page { min-height: 100vh; padding: 30px clamp(20px, 4vw, 48px) 20px; background: var(--bg); }
+.screen-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 22px; }
+.screen-header .brand img { width: 58px; height: 58px; }
+.screen-header .brand strong { font-size: 1.3rem; }
+.screen-clock { color: var(--gold); font-size: clamp(1.8rem, 4vw, 3rem); font-family: var(--font-head); }
+.screen-highlight {
+  min-height: 0; display: grid; align-content: center; gap: 10px; padding: clamp(20px, 3vw, 30px) clamp(24px, 4vw, 36px);
+  border-radius: var(--radius-lg); background: var(--green-bg); border: 2.5px solid rgba(143,174,109,.6);
+  box-shadow: var(--shadow-md); animation: screenRise .5s ease both;
+}
+.screen-highlight .eyebrow { color: var(--on-accent); background: var(--green); }
+.screen-highlight strong { color: var(--ink); font-family: var(--font-head); font-size: clamp(2.2rem, 4.6vw, 3.6rem); line-height: 1; }
+.screen-highlight p { font-size: clamp(1.05rem, 1.8vw, 1.5rem); color: var(--muted-2); }
+.screen-highlight ul { display: flex; gap: 10px; flex-wrap: wrap; margin: 4px 0 0; padding: 0; list-style: none; }
+.screen-highlight li { padding: 7px 14px; border-radius: var(--radius-pill); color: var(--on-accent); background: var(--green); font-weight: 800; }
+
+.screen-board { display: grid; grid-template-columns: 1fr 1.15fr; gap: 24px; margin-top: 20px; }
+.screen-board > div { padding: 22px 24px; border-radius: var(--radius-lg); background: var(--shell); border: 1px solid var(--line-soft); }
+.screen-board > div:last-child { background: var(--green-panel); border: 2px solid rgba(143,174,109,.35); }
+.screen-board h1 { color: var(--gold); font-size: clamp(1.6rem, 2.6vw, 2.2rem); margin: 0 0 4px; }
+.screen-board > div:last-child h1 { color: var(--green); }
+.screen-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 12px; }
+.screen-card { display: grid; gap: 8px; padding: 18px 20px; border-radius: var(--radius-md); background: var(--panel); border: 1.5px solid rgba(217,154,104,.25); animation: bkpop .4s ease both; }
+.screen-card.ready { background: var(--green-bg); border-color: rgba(143,174,109,.55); }
+.screen-card strong { color: var(--ink); font-family: var(--font-head); font-size: clamp(1.4rem, 2.4vw, 2rem); }
+.screen-card.ready strong { font-size: clamp(1.6rem, 2.8vw, 2.3rem); }
+.screen-card span { color: var(--gold); font-weight: 700; }
+.screen-card.ready span { color: var(--green); }
+.screen-card p { margin: 0; color: var(--muted-2); font-size: .92rem; }
+.screen-card .screen-order-code { width: max-content; max-width: 100%; padding: 6px 12px; border-radius: var(--radius-pill); color: var(--on-accent); background: var(--gold); font-family: var(--font-head); font-size: clamp(.85rem, 1.3vw, 1.05rem); text-transform: uppercase; }
+.screen-card.ready .screen-order-code { background: var(--green); }
+.screen-empty { padding: 18px; border: 1px dashed var(--line); border-radius: var(--radius-sm); color: var(--faint); }
+.screen-pulse .screen-highlight { animation: screenPop .9s ease both; }
+.screen-footer { position: fixed; left: 0; right: 0; bottom: 6px; display: flex; align-items: center; justify-content: center; gap: 16px; padding: 6px; }
+.screen-instagram { padding: 7px 14px; border: 1px solid rgba(217,154,104,.36); border-radius: var(--radius-pill); color: var(--gold) !important; background: rgba(0,0,0,.34); font-size: .92rem; }
+
+

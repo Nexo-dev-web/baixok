@@ -1,0 +1,44 @@
+﻿/* Tokens do design system: cores, tipografia, raios e sombras. */
+
+/* Baixo K - design system
+   Dark, warm, copper-and-sage. Bricolage Grotesque for headings/numbers, Figtree for body.
+   Single token layer - every color/radius/shadow below is the source of truth for all three pages. */
+:root {
+  --bg: #100e0c;
+  --shell: #151210;
+  --sidebar: #161210;
+  --panel: #1e1913;
+  --soft: #241d15;
+  --chip: #151210;
+  --line: rgba(255,255,255,.08);
+  --line-soft: rgba(255,255,255,.06);
+  --ink: #f3ece3;
+  --muted: #a99e8f;
+  --muted-2: #cfc4b6;
+  --faint: #6f665b;
+  --copper: #c97443;
+  --copper-hover: #d98551;
+  --gold: #d99a68;
+  --gold-light: #e8b184;
+  --green: #8fae6d;
+  --green-bg: #1c2416;
+  --green-panel: #131b10;
+  --amber-bg: #3a2418;
+  --danger: #d47f6e;
+  --danger-bg: #2a1a17;
+  --idle-bg: #221d17;
+  --on-accent: #1a120c;
+  --shadow-sm: 0 8px 22px rgba(0,0,0,.28);
+  --shadow-md: 0 18px 46px rgba(0,0,0,.34);
+  --shadow-lg: 0 24px 70px rgba(0,0,0,.42);
+  --shadow-glow: 0 10px 30px rgba(201,116,67,.35);
+  --radius-pill: 999px;
+  --radius-lg: 26px;
+  --radius-md: 20px;
+  --radius-sm: 14px;
+  --radius-xs: 10px;
+  --font-head: "Bricolage Grotesque", Figtree, system-ui, sans-serif;
+  --font-body: "Figtree", system-ui, sans-serif;
+}
+
+

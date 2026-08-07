@@ -1,0 +1,15 @@
+﻿/* Tela de login. */
+
+/* â€” pagina de entrada do balcao â€” */
+.entrar-page { display: grid; place-items: center; min-height: 100vh; padding: 24px; }
+.entrar-card {
+  display: grid; justify-items: center; gap: 14px; width: min(360px, 100%); text-align: center;
+  padding: 34px 30px; border-radius: var(--radius-lg); background: var(--panel);
+  border: 1px solid var(--line); box-shadow: var(--shadow-lg);
+}
+.entrar-card img { width: 62px; height: 62px; border-radius: 50%; object-fit: cover; border: 1.5px solid rgba(217,154,104,.45); }
+.entrar-card h1 { font-size: 1.5rem; }
+.entrar-card p { margin-top: 4px; font-size: .86rem; line-height: 1.45; }
+.entrar-card input { text-align: center; letter-spacing: .12em; }
+
+

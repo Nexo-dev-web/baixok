@@ -1,0 +1,26 @@
+{
+  "name": "@baixok/backend",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "comentario": "O --disable-warning=ExperimentalWarning saiu junto com o node:sqlite: o banco agora e o Postgres via `pg`, que nao emite aviso nenhum. Deixar a flag esconderia avisos experimentais de verdade se algum aparecer.",
+  "comentario-test": "A suite e de integracao e precisa de um Postgres proprio em TEST_DATABASE_URL — veja tests/apoio/banco.js. Sem a variavel ela se pula avisando, em vez de rodar contra o banco da loja.",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "migrate": "node src/db/migrate.js",
+    "seed": "node src/db/seed.js",
+    "import:legado": "node src/db/import-legado.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.0",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.1.0",
+    "pg": "^8.22.0",
+    "zod": "^4.0.5"
+  }
+}
