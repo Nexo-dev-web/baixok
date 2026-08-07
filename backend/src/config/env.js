@@ -77,6 +77,12 @@ const schema = z.object({
    * proprio e o limite de conexoes do projeto estoura rapido sem ele. */
   SUPABASE_DATABASE_URL: z.string().url().optional(),
 
+  /* Bancos com mTLS (como o PostgreSQL gerenciado da Square Cloud) exigem que
+   * o cliente apresente certificado e chave privada. A Square entrega ambos no
+   * mesmo certificate.pem; em producao ele entra como Base64 para nao precisar
+   * versionar um arquivo secreto junto da aplicacao. */
+  DATABASE_CLIENT_CERT_BASE64: z.string().min(1).optional(),
+
   /* Tetos por IP. Configuraveis porque a loja com wifi unico faz dezenas de
    * clientes chegarem com o mesmo IP — o padrao serve para a maioria, mas quem
    * usa NAT pesado precisa afrouxar sem editar codigo. */

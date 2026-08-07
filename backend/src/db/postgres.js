@@ -57,13 +57,29 @@ export function abrirPool() {
    * antes da primeira consulta. O Supabase nunca aparece com esse parametro —
    * la o TLS continua obrigatorio pelo caminho de baixo. */
   const semTls = /[?&]sslmode=disable(&|$)/.test(env.SUPABASE_DATABASE_URL);
+  const certificadoCliente = env.DATABASE_CLIENT_CERT_BASE64
+    ? Buffer.from(env.DATABASE_CLIENT_CERT_BASE64, "base64").toString("utf8")
+    : undefined;
+
+  if (certificadoCliente && !certificadoCliente.includes("-----BEGIN CERTIFICATE-----")) {
+    throw new Error("DATABASE_CLIENT_CERT_BASE64 invalido: o valor nao contem um certificado PEM.");
+  }
+
+  if (certificadoCliente && !certificadoCliente.includes("PRIVATE KEY-----")) {
+    throw new Error("DATABASE_CLIENT_CERT_BASE64 invalido: o valor nao contem a chave privada PEM.");
+  }
 
   pool = new Pool({
     connectionString: env.SUPABASE_DATABASE_URL,
     /* O Supabase exige TLS. SUPABASE_INSECURE_TLS existe porque a rede da loja
      * intercepta certificado — o mesmo motivo que ja obrigou a flag no resto do
      * projeto. Em producao ela fica desligada e o certificado e conferido. */
-    ssl: semTls ? false : { rejectUnauthorized: !env.SUPABASE_INSECURE_TLS },
+    ssl: semTls ? false : {
+      rejectUnauthorized: !env.SUPABASE_INSECURE_TLS,
+      /* O certificate.pem da Square e um bundle. O TLS do Node aceita o mesmo
+       * PEM nos dois campos e extrai de cada um o bloco correspondente. */
+      ...(certificadoCliente ? { cert: certificadoCliente, key: certificadoCliente } : {})
+    },
     max: 10,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000
