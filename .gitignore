@@ -1,1 +1,26 @@
+# Dados da loja. NUNCA versionar: contem o banco com nome, telefone e endereco
+# de clientes, alem dos hashes de senha da equipe.
 data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Segredos
+.env
+.env.*
+!.env.example
+
+# Dependencias e build
+node_modules/
+frontend/dist/
+
+# Artefatos de ferramenta de design (pesados e nao sao codigo-fonte)
+LAYOUT.zip
+*.dc.html
+
+# Sistema operacional / editor
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/

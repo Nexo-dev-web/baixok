@@ -1,0 +1,52 @@
+# Publicacao do front no Netlify.
+#
+# Sem este arquivo o Netlify nao roda build nenhum e publica a raiz do
+# repositorio como esta. Como a raiz nao tem index.html (as paginas moram em
+# frontend/), toda URL cai no "Page not found" — inclusive a raiz e /admin.
+#
+# ATENCAO: isto publica SO o front. O backend (Express + Postgres + SSE) nao roda
+# no Netlify; enquanto ele nao estiver no ar em algum lugar, as paginas abrem
+# mas mostram "sem conexao" — e toda chamada em /api volta 404, porque nao existe
+# arquivo estatico com esse nome. Veja o bloco de proxy no fim do arquivo.
+
+[build]
+  # Monorepo com workspaces: o install roda na raiz e este script chama o
+  # `vite build` dentro de frontend/.
+  command = "npm run build"
+
+  # Saida do Vite. As quatro paginas (index, admin, telao, entrar) saem aqui
+  # com os assets versionados por hash.
+  publish = "frontend/dist"
+
+[build.environment]
+  # Fixado de proposito: sem isto o Netlify escolhe a versao dele e o build passa
+  # a depender de quando foi publicado. O piso do projeto e menor (engines da
+  # raiz: >= 20.11), mas aqui e so o build do Vite — nao ha razao para nao usar
+  # uma LTS recente.
+  NODE_VERSION = "22"
+
+# --------------------------------------------------------------------- API ---
+# O front chama tudo em /api (services/http.js). Em producao essas chamadas
+# precisam chegar ao backend, que roda em outro host — Netlify serve arquivo
+# estatico e nao executa o servidor.
+#
+# Assim que o backend estiver no ar, troque a URL abaixo e descomente. Passar
+# pelo proxy (em vez de apontar o front direto para o outro dominio) mantem a
+# mesma origem: o cookie de sessao continua funcionando como em dev e nao
+# precisamos afrouxar CORS.
+#
+# [[redirects]]
+#   from = "/api/*"
+#   to = "https://SEU-BACKEND.exemplo.com/api/:splat"
+#   status = 200
+#   force = true
+#
+# RESSALVA sobre /api/eventos/* (SSE): o proxy do Netlify nao foi feito para
+# resposta que fica aberta. Ele bufferiza e corta por tempo, entao o painel, o
+# KDS e o telao tendem a nao receber os avisos por este caminho — as telas
+# carregam, mas param de se atualizar sozinhas.
+#
+# Se isso acontecer, o conserto e o front falar direto com o dominio do backend
+# nessas rotas: sirva o front pelo proprio backend (ele ja faz isso quando
+# frontend/dist existe) ou aponte o EventSource para a origem do backend e ligue
+# CORS_ORIGIN + COOKIE_SECURE + SameSite=None para o cookie sobreviver.

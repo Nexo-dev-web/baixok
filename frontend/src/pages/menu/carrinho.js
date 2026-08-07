@@ -1,0 +1,146 @@
+/* Painel lateral do pedido: itens, cupom e totais.
+ *
+ * Todo valor mostrado aqui e PREVIA. O total cobrado e o que o servidor calcula
+ * ao registrar o pedido, com o cardapio da casa. Deixar isso explicito importa:
+ * o sistema antigo tratava o total do carrinho como verdade e mandava junto no
+ * corpo do pedido. */
+import { el, render, $, mostrar } from "../../utils/dom.js";
+import { dinheiro, reais } from "../../utils/formato.js";
+import { carrinho, cupomGuardado } from "./carrinho-store.js";
+import { apiPublica } from "../../services/api.js";
+import { toast } from "../../components/toast.js";
+
+/* Ultimo resultado da validacao do cupom, vindo do servidor. */
+let cupomAplicado = null;
+
+export const descontoAtual = () => (cupomAplicado?.valido ? Number(cupomAplicado.desconto) : 0);
+export const codigoAplicado = () => (cupomAplicado?.valido ? cupomGuardado.ler() : "");
+
+function avisoCupom(mensagem, ok = false) {
+  const alvo = $("#coupon-feedback");
+  if (!alvo) return;
+  alvo.textContent = mensagem || "";
+  alvo.classList.toggle("hidden", !mensagem);
+  alvo.classList.toggle("ok", ok);
+}
+
+function linhaItem(item) {
+  return el("div.cart-row", { dataset: { id: item.id } },
+    el("div.cart-thumb", {}, item.image
+      ? el("img", { src: item.image, alt: item.name, loading: "lazy" })
+      : el("div.no-photo", {}, "Sem foto")),
+    el("div.cart-row-body", {},
+      el("div.price-row", {},
+        el("strong", {}, `${item.qty}x ${item.name}`),
+        el("span", {}, reais(item.price * item.qty))
+      ),
+      el("div.qty-actions", {},
+        el("button", {
+          type: "button", dataset: { acao: "qtd", id: item.id, delta: "-1" },
+          "aria-label": `Remover uma unidade de ${item.name}`
+        }, "-"),
+        el("button", {
+          type: "button", dataset: { acao: "qtd", id: item.id, delta: "1" },
+          "aria-label": `Adicionar uma unidade de ${item.name}`
+        }, "+")
+      )
+    )
+  );
+}
+
+export function desenharCarrinho({ produtosPorId, modalidade, cotacao, modoMesa }) {
+  const alvo = $("#cart-items");
+  if (!alvo) return { subtotal: 0, total: 0 };
+
+  const { linhas, avisos } = carrinho.comCatalogo(produtosPorId);
+  if (avisos.length) toast(avisos[0]);
+
+  render(alvo, linhas.length
+    ? linhas.map(linhaItem)
+    : el("p.faint", {}, "Nenhum item no pedido."));
+
+  const subtotal = linhas.reduce((soma, item) => soma + item.price * item.qty, 0);
+  const desconto = Math.min(subtotal, descontoAtual());
+  const frete = modalidade === "entrega" && cotacao?.dentro ? Number(cotacao.taxa) : 0;
+  const total = Math.max(0, subtotal - desconto) + frete;
+
+  /* No modo mesa nao ha cupom nem entrega: a conta e fechada no balcao. */
+  mostrar($("#coupon-field"), !modoMesa);
+  mostrar($("#coupon-applied"), Boolean(cupomAplicado?.valido));
+  if (cupomAplicado?.valido) {
+    $("#coupon-applied-code").textContent = cupomGuardado.ler();
+    $("#coupon-applied-desc").textContent = cupomAplicado.descricao || "";
+  }
+
+  $("#cart-subtotal").textContent = dinheiro(subtotal);
+  $("#cart-discount").textContent = dinheiro(desconto);
+  $("#cart-delivery").textContent = dinheiro(frete);
+  $("#cart-total").textContent = dinheiro(total);
+  $("#mobile-total").textContent = dinheiro(total);
+  $("#cart-count").textContent = String(linhas.reduce((soma, item) => soma + item.qty, 0));
+
+  mostrar($("#delivery-line"), frete > 0);
+  mostrar($("#discount-line"), desconto > 0);
+  mostrar($("#subtotal-line"), desconto > 0 || frete > 0);
+
+  return { subtotal, desconto, frete, total, linhas };
+}
+
+/* A validacao acontece no servidor.
+ *
+ * O painel antigo mandava a lista inteira de cupons para o navegador so para
+ * conseguir responder "esse codigo existe?" — e com ela ia o valor de cada
+ * campanha, inclusive as ainda nao divulgadas. Aqui perguntamos por um codigo
+ * de cada vez e recebemos so o efeito no carrinho deste cliente. */
+export async function aplicarCupom(subtotal, telefone) {
+  const campo = $("#coupon-code-input");
+  const code = (campo?.value || "").trim().toUpperCase();
+
+  if (!code) return avisoCupom("Digite o codigo do cupom.");
+  if (!carrinho.linhas().length) return avisoCupom("Adicione itens antes de aplicar o cupom.");
+
+  try {
+    const resposta = await apiPublica.validarCupom({ code, subtotal, phone: telefone || "" });
+    if (!resposta.valido) {
+      cupomAplicado = null;
+      cupomGuardado.limpar();
+      return avisoCupom(resposta.motivo || "Cupom invalido.");
+    }
+    cupomAplicado = resposta;
+    cupomGuardado.gravar(code);
+    if (campo) campo.value = "";
+    avisoCupom("");
+    toast("Cupom aplicado.");
+  } catch (erro) {
+    avisoCupom(erro.message || "Nao foi possivel validar o cupom agora.");
+  }
+}
+
+export function removerCupom() {
+  cupomAplicado = null;
+  cupomGuardado.limpar();
+  avisoCupom("");
+}
+
+/* Revalida o cupom guardado quando o carrinho muda de valor: um cupom com
+ * pedido minimo deixa de valer se o cliente remover itens, e o total precisa
+ * refletir isso na hora. */
+export async function revalidarCupom(subtotal, telefone) {
+  const code = cupomGuardado.ler();
+  if (!code) {
+    cupomAplicado = null;
+    return;
+  }
+  try {
+    const resposta = await apiPublica.validarCupom({ code, subtotal, phone: telefone || "" });
+    cupomAplicado = resposta.valido ? resposta : null;
+    if (!resposta.valido) avisoCupom(resposta.motivo || "");
+  } catch {
+    cupomAplicado = null;      // sem conexao: nao promete desconto que nao da
+  }
+}
+
+export function limparEstadoCupom() {
+  cupomAplicado = null;
+  avisoCupom("");
+}

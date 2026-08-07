@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Baixo K - Cardapio</title>
+  <meta name="description" content="Cardapio digital do Baixo K: pizzas, burgues, massas e drinks.">
+  <meta property="og:title" content="Baixo K - Cardapio">
+  <meta property="og:description" content="Peca pelo cardapio digital do Baixo K. Pizza, burgues, massas e drinks.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="/images/loja-baixo-k-hero.png">
+  <meta property="og:image:alt" content="Fachada do Baixo K">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Baixo K - Cardapio">
+  <meta name="twitter:description" content="Peca pelo cardapio digital do Baixo K.">
+  <meta name="twitter:image" content="/images/loja-baixo-k-hero.png">
+  <meta name="theme-color" content="#f3c66b">
+  <link rel="icon" href="/images/baixok-logo-v2.png">
+  <link rel="apple-touch-icon" href="/images/baixok-logo-v2.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700;800&family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Widget de busca de endereco da Mapbox. Se a CDN nao carregar, a busca cai
+       sozinha para o proprio servidor - ver src/pages/menu/entrega.js -->
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css">
+  <script defer src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
+</head>
+<body data-page="menu">
+  <header class="table-bar hidden" id="table-bar">
+    <div>
+      <strong id="table-bar-title">Mesa</strong>
+      <span id="table-bar-status">Comanda aberta</span>
+    </div>
+    <img src="/images/baixok-logo-v2.png" alt="Baixo K">
+  </header>
+
+  <nav class="table-nav hidden" id="table-nav" aria-label="Navegacao da mesa">
+    <button class="table-tab active" type="button" data-view="inicio" aria-selected="true">Inicio</button>
+    <button class="table-tab" type="button" data-view="comanda" aria-selected="false">
+      Comanda <span class="table-tab-count hidden" id="comanda-count">0</span>
+    </button>
+  </nav>
+
+  <section class="table-blocked hidden" id="table-blocked">
+    <span class="blocked-icon" aria-hidden="true">▢</span>
+    <h1 id="blocked-title">Comanda fechada</h1>
+    <p id="blocked-text">Chame o atendente para abrir a mesa e liberar os pedidos por aqui.</p>
+    <a class="secondary" href="/index.html">Ver o cardapio mesmo assim</a>
+  </section>
+
+  <section class="table-comanda hidden" id="table-comanda">
+    <div class="comanda-empty hidden" id="comanda-empty">
+      <span class="comanda-icon" aria-hidden="true">🍽</span>
+      <strong>Voce ainda nao fez nenhum pedido</strong>
+      <p>Tudo que voce pedir por aqui vai somando nesta comanda ate o fechamento da conta.</p>
+      <button class="primary wide" type="button" data-view="inicio">Comecar a pedir</button>
+    </div>
+    <div class="comanda-body hidden" id="comanda-body">
+      <div class="section-head">
+        <div>
+          <span class="eyebrow">Sua comanda</span>
+          <h2 id="comanda-title">Mesa</h2>
+          <p>Itens ja enviados para a cozinha. A conta e paga no balcao no fim.</p>
+        </div>
+      </div>
+      <div class="comanda-items" id="comanda-items"></div>
+      <div class="comanda-totals" id="comanda-totals"></div>
+      <button class="primary wide" type="button" data-view="inicio">Adicionar mais itens</button>
+      <button class="secondary wide" type="button" id="open-payment-info">Ver formas de pagamento</button>
+    </div>
+  </section>
+
+  <div class="modal hidden" id="payment-modal" role="dialog" aria-modal="true" aria-labelledby="payment-title">
+    <div class="modal-card">
+      <div>
+        <h2 id="payment-title">Formas de pagamento</h2>
+        <p>A conta e fechada no balcao. Avise o atendente quando quiser encerrar a comanda.</p>
+      </div>
+      <div class="pay-options">
+        <div class="pay-option"><strong>Pix</strong><span>QR do estabelecimento no balcao</span></div>
+        <div class="pay-option"><strong>Cartao</strong><span>Credito ou debito na maquininha</span></div>
+        <div class="pay-option"><strong>Dinheiro</strong><span>Troco no balcao</span></div>
+      </div>
+      <p class="modal-hint">Sobre a conta e cobrada a taxa de servico, ja mostrada no total da comanda.</p>
+      <button class="secondary wide" type="button" id="close-payment-info">Fechar</button>
+    </div>
+  </div>
+
+  <header class="topbar menu-topbar">
+    <div class="brand">
+      <img src="/images/baixok-logo-v2.png" alt="Baixo K">
+      <div>
+        <strong>Baixo K</strong>
+        <span>Pizza, burgues, massas e drinks</span>
+      </div>
+    </div>
+    <div class="top-actions">
+      <a class="secondary" href="https://www.instagram.com/baixok_/" target="_blank" rel="noopener">◎ Instagram</a>
+    </div>
+  </header>
+
+  <section class="hero menu-hero">
+    <div class="hero-copy">
+      <img class="hero-mark" src="/images/baixok-logo-v2.png" alt="">
+      <span class="eyebrow live-badge">Aberto para pedidos</span>
+      <h1>Baixo K</h1>
+      <p>Pizza, burgues, massas e drinks.</p>
+      <div class="hero-actions">
+        <a class="primary" href="#menu-shell">Ver cardapio</a>
+        <a class="secondary dark-button" href="https://www.instagram.com/baixok_/" target="_blank" rel="noopener">@baixok_</a>
+      </div>
+    </div>
+    <div class="venue-card" aria-label="Informacoes rapidas">
+      <strong>Retirada ou entrega</strong>
+      <span>Sacadura Cabral, 10</span>
+    </div>
+  </section>
+
+  <main class="shop-layout">
+    <section class="mobile-order-strip" aria-label="Resumo rapido">
+      <div><strong>Retirada</strong><span>Nome no telao</span></div>
+      <div><strong>Entrega</strong><span>Pedido pelo WhatsApp</span></div>
+    </section>
+
+    <section class="signature-strip" id="signature" aria-label="Destaques Baixo K"></section>
+
+    <section class="experience-strip" aria-label="Como funciona">
+      <div><strong>1</strong><span>Monte seu pedido no celular</span></div>
+      <div><strong>2</strong><span>Escolha retirada ou entrega</span></div>
+      <div><strong>3</strong><span>Acompanhe seu nome no telao</span></div>
+    </section>
+
+    <section class="menu-shell" id="menu-shell">
+      <div class="section-head">
+        <div>
+          <span class="eyebrow">Cardapio Baixo K</span>
+          <h2>Escolha o que vai para a mesa</h2>
+          <p>Produtos com estoque aparecem automaticamente. Finalize como retirada ou entrega.</p>
+        </div>
+        <input id="search" type="search" placeholder="Buscar pizza, burguer, drink..." aria-label="Buscar no cardapio">
+      </div>
+      <div class="filters" id="filters" role="group" aria-label="Filtrar por categoria"></div>
+      <div class="menu-grid" id="menu"></div>
+    </section>
+
+    <aside class="cart" id="cart" aria-label="Seu pedido">
+      <div class="cart-head">
+        <div>
+          <span class="eyebrow">Checkout rapido</span>
+          <h2>Seu pedido</h2>
+        </div>
+        <strong class="cart-count" id="cart-count">0</strong>
+        <button class="cart-close" type="button" id="close-cart" aria-label="Fechar carrinho">×</button>
+      </div>
+
+      <div class="cart-items" id="cart-items"></div>
+
+      <div class="service-mode" role="group" aria-label="Tipo do pedido">
+        <button class="mode-btn active" id="mode-retirada" type="button">Retirada</button>
+        <button class="mode-btn" id="mode-entrega" type="button">Entrega</button>
+      </div>
+
+      <div class="pickup-banner" id="pickup-banner">RETIRADA</div>
+
+      <label>
+        Cliente
+        <input id="customer-name" placeholder="Nome para chamar no telao" autocomplete="name">
+      </label>
+      <label>
+        Telefone
+        <input id="customer-phone" placeholder="WhatsApp ou telefone" autocomplete="tel" inputmode="tel">
+      </label>
+      <label id="place-label" class="hidden">
+        Endereco de entrega
+        <div class="geocoder" id="endereco-widget"></div>
+        <input id="customer-place" placeholder="Rua e numero" autocomplete="off">
+      </label>
+      <div class="sugestoes" id="endereco-sugestoes"></div>
+      <p class="entrega-aviso hidden" id="entrega-aviso" role="status"></p>
+      <label>
+        Pagamento
+        <select id="payment-method">
+          <option value="">Selecione</option>
+          <option>Pix</option>
+          <option>Cartao</option>
+          <option>Dinheiro</option>
+        </select>
+      </label>
+      <label class="hidden" id="change-field">
+        Troco para quanto?
+        <input id="change-for" placeholder="Ex: 100,00" inputmode="decimal">
+      </label>
+      <label>
+        Observacao
+        <textarea id="order-note" rows="3" placeholder="Sem cebola, ponto da carne, troco..."></textarea>
+      </label>
+
+      <div class="coupon-field" id="coupon-field">
+        <div class="coupon-input-row">
+          <input id="coupon-code-input" placeholder="Cupom de desconto" autocomplete="off">
+          <button class="secondary" type="button" id="apply-coupon">Aplicar</button>
+        </div>
+        <p class="coupon-feedback hidden" id="coupon-feedback" role="status"></p>
+        <div class="coupon-applied hidden" id="coupon-applied">
+          <span><code id="coupon-applied-code"></code> <em id="coupon-applied-desc"></em></span>
+          <button type="button" id="remove-coupon" aria-label="Remover cupom">×</button>
+        </div>
+      </div>
+
+      <div class="totals-block">
+        <div class="totals-line hidden" id="subtotal-line">
+          <span>Subtotal</span><span>R$ <span id="cart-subtotal">0,00</span></span>
+        </div>
+        <div class="totals-line hidden" id="delivery-line">
+          <span>Taxa de entrega</span><span>R$ <span id="cart-delivery">0,00</span></span>
+        </div>
+        <div class="totals-line discount hidden" id="discount-line">
+          <span>Desconto</span><span>- R$ <span id="cart-discount">0,00</span></span>
+        </div>
+        <div class="totals">
+          <span>Total</span><strong>R$ <span id="cart-total">0,00</span></strong>
+        </div>
+      </div>
+
+      <button class="primary wide" id="send-order" type="button">Enviar pedido</button>
+      <button class="secondary wide" id="clear-cart" type="button">Limpar</button>
+    </aside>
+  </main>
+
+  <button class="mobile-cart" type="button" id="open-cart">
+    Ver pedido <strong>R$ <span id="mobile-total">0,00</span></strong>
+  </button>
+
+  <footer class="nexo-footer">
+    Siga o <a href="https://www.instagram.com/baixok_/" target="_blank" rel="noopener">Baixo K no Instagram</a>
+    · Desenvolvido pela <a href="https://portfolio-nexo.netlify.app/" target="_blank" rel="noopener">Nexo Developer</a>
+  </footer>
+
+  <div class="toast" id="toast" role="alert" aria-live="polite"></div>
+
+  <script type="module" src="/src/pages/menu/index.js"></script>
+</body>
+</html>
