@@ -6,14 +6,14 @@
  * mais facil para lancar venda com valor errado sem deixar rastro. */
 import { el, render, $, delegar, mostrar, ligarModal } from "../../utils/dom.js";
 import { reais } from "../../utils/formato.js";
-import { CANAIS_ROTULO } from "../../utils/categorias.js";
+import { CANAIS_ROTULO, MODALIDADES_ROTULO } from "../../utils/categorias.js";
 import { apiPedidos } from "../../services/api.js";
 import { estado, carregar, precoEfetivo } from "./store.js";
 import { toast, toastFalha } from "../../components/toast.js";
 
 const PAGAMENTOS = ["Dinheiro", "Pix", "Cartao", "Online"];
 
-const rascunho = { itens: [], canal: "loja", pagamento: "Dinheiro", mesa: null };
+const rascunho = { itens: [], canal: "loja", pagamento: "Dinheiro", modalidade: "retirada", mesa: null };
 let aoConcluir = null;
 
 const subtotal = () => rascunho.itens.reduce((soma, item) => soma + item.price * item.qty, 0);
@@ -46,6 +46,18 @@ function desenharChips() {
       ));
   }
 
+  const secaoModalidade = $("#manual-fulfillment-section");
+  mostrar(secaoModalidade, rascunho.mesa === null);
+  if (rascunho.mesa === null) {
+    render($("#manual-fulfillment"), ...["retirada", "entrega"].map(chave =>
+      el("button.chip", {
+        type: "button",
+        class: rascunho.modalidade === chave ? "active" : "",
+        dataset: { acao: "modalidade", modalidade: chave }
+      }, MODALIDADES_ROTULO[chave])
+    ));
+  }
+
   render($("#manual-payments"), ...PAGAMENTOS.map(rotulo =>
     el("button.chip", {
       type: "button",
@@ -69,8 +81,11 @@ function desenharProdutos() {
   render($("#manual-products"), ...(lista.length
     ? lista.map(produto =>
         el("button.manual-product", { type: "button", dataset: { acao: "add-item", id: produto.id } },
-          el("strong", {}, produto.name),
-          el("span", {}, reais(precoEfetivo(produto))),
+          produto.image
+            ? el("img.manual-thumb", { src: produto.image, alt: "", loading: "lazy" })
+            : el("span.manual-thumb.no-photo", {}, "Sem foto"),
+          el("span.manual-name", {}, produto.name),
+          el("span.manual-price", {}, reais(precoEfetivo(produto))),
           el("small", {}, `${produto.stock} em estoque`)
         ))
     : [el("p.faint", {}, "Nenhum produto encontrado.")]));
@@ -81,6 +96,9 @@ function desenharCarrinho() {
     ? [
         ...rascunho.itens.map(item =>
           el("div.manual-line", {},
+            item.image
+              ? el("img.manual-thumb", { src: item.image, alt: "", loading: "lazy" })
+              : el("span.manual-thumb.no-photo", {}, "Sem foto"),
             el("span", {}, `${item.qty}x ${item.name}`),
             el("span", {}, reais(item.price * item.qty)),
             el("div.qty-actions", {},
@@ -111,6 +129,7 @@ export function abrirVendaManual(mesa = null, callback = null) {
   rascunho.mesa = mesa;
   rascunho.canal = mesa === null ? "loja" : "loja";
   rascunho.pagamento = "Dinheiro";
+  rascunho.modalidade = mesa === null ? "retirada" : "mesa";
   aoConcluir = callback;
 
   $("#manual-title").textContent = mesa ? `Lancar pedido na mesa ${mesa}` : "Lancar pedido manual";
@@ -140,12 +159,14 @@ async function registrar() {
     items: rascunho.itens.map(item => ({ id: item.id, qty: item.qty })),
     customer: nome || (rascunho.mesa ? `Mesa ${rascunho.mesa}` : CANAIS_ROTULO[rascunho.canal]),
     phone: "",
-    place: rascunho.mesa ? `Mesa ${rascunho.mesa} - salao` : rascunho.canal === "loja" ? "Retirada no balcao" : "Venda externa",
+    place: rascunho.mesa
+      ? `Mesa ${rascunho.mesa} - salao`
+      : rascunho.modalidade === "entrega" ? "Entrega" : "Retirada",
     note: "",
     payment: rascunho.pagamento,
     trocoPara: rascunho.pagamento === "Dinheiro" && rascunho.mesa === null ? trocoPara : null,
     channel: rascunho.canal,
-    fulfillment: rascunho.mesa ? "mesa" : "retirada",
+    fulfillment: rascunho.mesa ? "mesa" : rascunho.modalidade,
     tableNumber: rascunho.mesa
   };
 
@@ -184,6 +205,10 @@ export function ligarVendaManual() {
     rascunho.pagamento = botao.dataset.pagamento;
     desenharChips();
   });
+  delegar(modal, "click", "[data-acao='modalidade']", (_e, botao) => {
+    rascunho.modalidade = botao.dataset.modalidade;
+    desenharChips();
+  });
 
   $("#manual-change-for")?.addEventListener("input", () => {
     if (rascunho.pagamento === "Dinheiro") definirErro("");
@@ -197,7 +222,7 @@ export function ligarVendaManual() {
       if (existente.qty >= produto.stock) return definirErro(`${produto.name}: restam ${produto.stock} em estoque.`);
       existente.qty += 1;
     } else {
-      rascunho.itens.push({ id: produto.id, name: produto.name, price: precoEfetivo(produto), qty: 1 });
+      rascunho.itens.push({ id: produto.id, name: produto.name, image: produto.image || "", price: precoEfetivo(produto), qty: 1 });
     }
     definirErro("");
     desenharCarrinho();
