@@ -6,7 +6,7 @@
  * dentro de um tablet que fica no balcao. */
 import { el, render, $, delegar } from "../../../utils/dom.js";
 import { reais, dinheiro } from "../../../utils/formato.js";
-import { CANAIS_ROTULO } from "../../../utils/categorias.js";
+import { CANAIS_ROTULO, MODALIDADES_ROTULO } from "../../../utils/categorias.js";
 import { apiPedidos, apiRelatorios } from "../../../services/api.js";
 import { toastFalha, toastOk } from "../../../components/toast.js";
 
@@ -48,6 +48,21 @@ function barras(linhas, formatar, vazioMensagem = "Sem dados no periodo.", vazio
   ));
 }
 
+const primeiro = lista => lista?.[0] || null;
+
+function produtoResumo(produto) {
+  return produto ? `${produto.rotulo} (${produto.quantidade}x)` : "Sem venda";
+}
+
+function resumoModalidade(porModalidade) {
+  const mapa = Object.fromEntries((porModalidade || []).map(linha => [linha.rotulo, linha.pedidos]));
+  const loja = Number(mapa.mesa || 0) + Number(mapa.retirada || 0);
+  return {
+    loja,
+    entrega: Number(mapa.entrega || 0)
+  };
+}
+
 function horaCurta(data) {
   return new Intl.DateTimeFormat("pt-BR", {
     timeZone: "America/Sao_Paulo",
@@ -87,29 +102,54 @@ export async function desenharDashboard() {
     return;
   }
 
-  const { resumo, porHora, porCanal, porPagamento, maisVendidos, estoqueBaixo, periodo, vendas = [] } = ultimoRelatorio;
+  const {
+    resumo, porHora, porDia = [], porCanal, porPagamento, porModalidade = [],
+    maisVendidos, menosVendidos = [], estoqueBaixo, periodo, vendas = []
+  } = ultimoRelatorio;
+  const pagamentoTop = primeiro(porPagamento);
+  const plataformaTop = primeiro(porCanal);
+  const modalidades = resumoModalidade(porModalidade);
 
   render($("#dashboard-metrics"),
     metrica("Faturamento", reais(resumo.faturamento), periodo.rotulo),
     metrica("Pedidos", String(resumo.pedidos), "cancelados fora da conta"),
     metrica("Ticket medio", reais(resumo.ticketMedio), null),
-    metrica("Descontos", reais(resumo.descontos), resumo.taxasEntrega ? `entregas ${reais(resumo.taxasEntrega)}` : null),
+    metrica("Mais vendido", produtoResumo(primeiro(maisVendidos)), primeiro(maisVendidos) ? reais(primeiro(maisVendidos).faturamento) : null),
+    metrica("Menos vendido", produtoResumo(primeiro(menosVendidos)), primeiro(menosVendidos) ? reais(primeiro(menosVendidos).faturamento) : null),
+    metrica("Pagamento lider", pagamentoTop ? pagamentoTop.rotulo || "nao informado" : "Sem dados", pagamentoTop ? reais(pagamentoTop.faturamento) : null),
+    metrica("Entrega x loja", `${modalidades.entrega} / ${modalidades.loja}`, "entrega / loja"),
+    metrica("Plataforma lider", plataformaTop ? CANAIS_ROTULO[plataformaTop.rotulo] || plataformaTop.rotulo : "Sem dados", plataformaTop ? reais(plataformaTop.faturamento) : null),
+    metrica("Descontos", reais(resumo.descontos), resumo.taxasEntrega ? `taxas entrega ${reais(resumo.taxasEntrega)}` : null),
     metrica("Estoque critico", String(estoqueBaixo.length), estoqueBaixo.length ? "itens no minimo" : "tudo certo",
       estoqueBaixo.length ? "alert-copper" : "")
   );
 
-  render($("#channel-chart"), barras(
-    porCanal.map(linha => ({ rotulo: CANAIS_ROTULO[linha.rotulo] || linha.rotulo || "-", valor: linha.faturamento })),
+  render($("#day-chart"), barras(
+    porDia.map(linha => ({ rotulo: linha.rotulo, valor: linha.faturamento })),
     reais,
+    "Sem vendas por dia neste periodo.",
+    "Troque para 7 dias ou 30 dias para enxergar a evolucao."
+  ));
+
+  render($("#channel-chart"), barras(
+    porCanal.map(linha => ({ rotulo: CANAIS_ROTULO[linha.rotulo] || linha.rotulo || "-", valor: linha.pedidos })),
+    valor => `${valor} ped.`,
     "Nenhum canal movimentou neste periodo.",
-    "Quando houver vendas, cada canal ganha sua barra aqui."
+    "iFood, 99Food, WhatsApp, loja e cardapio aparecem aqui."
   ));
 
   render($("#payment-chart"), barras(
-    porPagamento.map(linha => ({ rotulo: linha.rotulo || "nao informado", valor: linha.faturamento })),
-    reais,
+    porPagamento.map(linha => ({ rotulo: linha.rotulo || "nao informado", valor: linha.pedidos })),
+    valor => `${valor} ped.`,
     "Sem pagamentos registrados.",
     "A divisao por forma de pagamento vai aparecer neste bloco."
+  ));
+
+  render($("#fulfillment-chart"), barras(
+    porModalidade.map(linha => ({ rotulo: MODALIDADES_ROTULO[linha.rotulo] || linha.rotulo || "-", valor: linha.pedidos })),
+    valor => `${valor} ped.`,
+    "Sem modalidades registradas.",
+    "Mostra quantas entregas, retiradas e mesas sairam."
   ));
 
   render($("#hour-chart"), barras(
@@ -124,6 +164,13 @@ export async function desenharDashboard() {
     valor => `${valor}x`,
     "Sem itens vendidos ainda.",
     "Os produtos mais fortes do periodo entram aqui automaticamente."
+  ));
+
+  render($("#worst-items"), barras(
+    menosVendidos.map(linha => ({ rotulo: linha.rotulo, valor: linha.quantidade })),
+    valor => `${valor}x`,
+    "Sem itens para comparar.",
+    "Quando houver mais vendas, os itens fracos aparecem aqui."
   ));
 
   render($("#stock-alert-chart"), estoqueBaixo.length

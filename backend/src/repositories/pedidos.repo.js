@@ -232,6 +232,20 @@ export const pedidosRepo = {
     `, [desde, ate, canal, canal]);
   },
 
+  async porDia({ desde, ate, canal = null }) {
+    return await todos(`
+      SELECT to_char(criado_em AT TIME ZONE 'America/Sao_Paulo', 'DD/MM') AS rotulo,
+             MIN((criado_em AT TIME ZONE 'America/Sao_Paulo')::date) AS data_ordem,
+             COUNT(*)::int AS pedidos,
+             COALESCE(SUM(total), 0) AS faturamento
+        FROM pedidos
+       WHERE criado_em >= ?::timestamptz AND criado_em <= ?::timestamptz AND status <> 'cancelado'
+         AND (?::text IS NULL OR canal = ?::text)
+       GROUP BY rotulo
+       ORDER BY data_ordem
+    `, [desde, ate, canal, canal]);
+  },
+
   async agruparPor(coluna, { desde, ate, canal = null }) {
     /* Lista fechada: `coluna` vem do controller e nunca e concatenada sem passar
      * por aqui. Nome de coluna nao pode ser parametro em SQL, entao a unica
@@ -260,6 +274,21 @@ export const pedidosRepo = {
          AND (?::text IS NULL OR p.canal = ?::text)
        GROUP BY i.nome
        ORDER BY quantidade DESC
+       LIMIT ?
+    `, [desde, ate, canal, canal, limite]);
+  },
+
+  async menosVendidos({ desde, ate, canal = null, limite = 10 }) {
+    return await todos(`
+      SELECT i.nome AS rotulo,
+             SUM(i.quantidade)::int AS quantidade,
+             SUM(i.quantidade * i.preco_unit) AS faturamento
+        FROM pedido_itens i
+        JOIN pedidos p ON p.id = i.pedido_id
+       WHERE p.criado_em >= ?::timestamptz AND p.criado_em <= ?::timestamptz AND p.status <> 'cancelado'
+         AND (?::text IS NULL OR p.canal = ?::text)
+       GROUP BY i.nome
+       ORDER BY quantidade ASC, faturamento ASC, rotulo ASC
        LIMIT ?
     `, [desde, ate, canal, canal, limite]);
   }
