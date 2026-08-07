@@ -341,7 +341,9 @@
       <input id="manual-customer" placeholder="Nome do cliente (opcional)" maxlength="80">
       <div class="manual-section hidden" id="manual-delivery-fields">
         <input id="manual-phone" placeholder="Telefone do cliente" inputmode="tel" maxlength="30">
-        <input id="manual-address" placeholder="Endereco de entrega" maxlength="160">
+        <input id="manual-address" placeholder="Endereco de entrega" maxlength="160" autocomplete="off">
+        <div class="sugestoes" id="manual-address-sugestoes"></div>
+        <p class="entrega-aviso hidden" id="manual-entrega-aviso" role="status"></p>
       </div>
       <div class="chip-row" id="manual-payments"></div>
       <label class="change-field hidden" id="manual-change-field">

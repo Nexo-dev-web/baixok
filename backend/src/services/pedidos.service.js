@@ -56,6 +56,23 @@ async function precificar(itens) {
   return precificados;
 }
 
+/* Cotacao de entrega, compartilhada entre o pedido do cardapio e o lancamento
+ * manual: mesma regra para os dois, sempre recalculada pelo servidor a partir
+ * do endereco em texto — nunca aceita taxa vinda do navegador. */
+async function cotarEntregaSeNecessario(dados) {
+  if (dados.fulfillment !== "entrega") return { taxa: 0, km: null, zona: null, minimo: 0 };
+
+  const config = await entregaService.config();
+  if (!config.zones.length) return { taxa: 0, km: null, zona: null, minimo: 0 };
+
+  if (!dados.place) throw new ErroApp("Informe o endereco de entrega.", 400, "endereco_ausente");
+  const cotacao = await entregaService.cotarPorEndereco(dados.place);
+  if (!cotacao.dentro) {
+    throw new ErroApp(`Endereco fora da area de entrega (${cotacao.km} km da loja).`, 400, "fora_da_area");
+  }
+  return { taxa: cotacao.taxa, km: cotacao.km, zona: cotacao.zona, minimo: cotacao.minimo };
+}
+
 /* Baixa o estoque item a item. O UPDATE traz `WHERE estoque >= ?` embutido:
  * se outro pedido levou a ultima unidade um instante antes, o rowCount volta 0,
  * lancamos, e a transacao inteira e desfeita — inclusive as baixas anteriores. */
@@ -88,18 +105,7 @@ export const pedidosService = {
     /* Passo 1 — rede fora da transacao.
      * A cotacao de entrega precisa da Mapbox; deixa-la aqui e o que mantem o
      * passo 2 falando so com o banco. */
-    let entrega = { taxa: 0, km: null, zona: null, minimo: 0 };
-    if (dados.fulfillment === "entrega") {
-      const config = await entregaService.config();
-      if (config.zones.length) {
-        if (!dados.place) throw new ErroApp("Informe o endereco de entrega.", 400, "endereco_ausente");
-        const cotacao = await entregaService.cotarPorEndereco(dados.place);
-        if (!cotacao.dentro) {
-          throw new ErroApp(`Endereco fora da area de entrega (${cotacao.km} km da loja).`, 400, "fora_da_area");
-        }
-        entrega = { taxa: cotacao.taxa, km: cotacao.km, zona: cotacao.zona, minimo: cotacao.minimo };
-      }
-    }
+    const entrega = await cotarEntregaSeNecessario(dados);
 
     /* Passo 2 — tudo o mais numa transacao, sem nenhuma chamada externa. */
     const pedido = await emTransacao(async () => {
@@ -177,6 +183,10 @@ export const pedidosService = {
 
   /* Lancamento manual pelo balcao: iFood, WhatsApp, venda de salao. */
   async criarManual(dados, { usuario, ip }) {
+    /* Mesma regra do pedido publico, fora da transacao pelo mesmo motivo:
+     * a cotacao faz I/O de rede (Mapbox). */
+    const entrega = await cotarEntregaSeNecessario(dados);
+
     const pedido = await emTransacao(async () => {
       if (dados.tableNumber != null) {
         const mesa = await mesasRepo.buscar(dados.tableNumber);
@@ -186,6 +196,15 @@ export const pedidosService = {
 
       const itens = await precificar(dados.items);
       const subtotal = itens.reduce((soma, item) => soma + item.price * item.qty, 0);
+
+      if (entrega.minimo && subtotal < entrega.minimo) {
+        throw new ErroApp(
+          `Pedido minimo de R$ ${entrega.minimo.toFixed(2)} para entrega nessa faixa.`,
+          400,
+          "abaixo_do_minimo"
+        );
+      }
+
       await baixarEstoque(itens);
 
       const novo = await pedidosRepo.inserir({
@@ -205,10 +224,10 @@ export const pedidosService = {
         subtotal,
         discount: 0,
         coupon: "",
-        deliveryFee: 0,
-        deliveryKm: null,
-        deliveryZone: null,
-        total: subtotal,
+        deliveryFee: entrega.taxa,
+        deliveryKm: entrega.km,
+        deliveryZone: entrega.zona,
+        total: subtotal + entrega.taxa,
         printed: false,
         stockDeducted: true,
         createdBy: usuario.id

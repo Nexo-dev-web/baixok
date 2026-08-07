@@ -12,6 +12,7 @@ import { logger } from "./lib/logger.js";
 import { iniciarPing } from "./lib/events.js";
 import { sessoesRepo } from "./repositories/sessoes.repo.js";
 import { usuariosRepo } from "./repositories/usuarios.repo.js";
+import { entregaRepo } from "./repositories/entrega.repo.js";
 import { limparFalhasVencidas } from "./services/auth.service.js";
 
 /* Falhar aqui e melhor do que subir e responder 500 em toda rota: sem banco o
@@ -40,6 +41,19 @@ const servidor = app.listen(env.PORT, () => {
  * atrasar a abertura da porta. */
 if ((await usuariosRepo.contarAdminsAtivos()) === 0) {
   logger.warn("Nenhum administrador cadastrado. Rode `npm run seed` para criar o primeiro acesso.");
+}
+
+/* Zona configurada sem token e uma loja aceitando pedido de mesa mas recusando
+ * todo pedido de entrega — silenciosamente, so descoberto quando um cliente
+ * reclama. Este aviso sai em todo restart enquanto o descompasso existir, para
+ * aparecer no log do host (Square Cloud, Render, etc.) sem depender de alguem
+ * lembrar de checar. */
+const configEntregaInicial = await entregaRepo.config();
+if (configEntregaInicial.zones.length && !env.MAPBOX_TOKEN) {
+  logger.error(
+    "Ha faixas de entrega configuradas mas MAPBOX_TOKEN nao esta definido. " +
+    "Todo pedido de entrega (cardapio e lancamento manual) vai falhar ate a variavel ser configurada neste ambiente."
+  );
 }
 
 iniciarPing();

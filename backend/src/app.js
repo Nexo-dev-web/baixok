@@ -100,6 +100,10 @@ export function criarApp() {
       setHeaders: (res, caminho) => {
         if (caminho.endsWith(".html")) res.set("Cache-Control", "no-store, must-revalidate");
         else if (caminho.includes("/assets/")) res.set("Cache-Control", "public, max-age=31536000, immutable");
+        /* Sem isto o service worker cai no cache padrao da CDN (Cloudflare, no
+         * Square Cloud) e uma correcao nele pode demorar dias para chegar ao
+         * navegador do cliente. */
+        else if (caminho.endsWith("service-worker.js")) res.set("Cache-Control", "no-store, must-revalidate");
       }
     }));
 
