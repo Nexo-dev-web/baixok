@@ -57,6 +57,12 @@ function desenharChips() {
       }, MODALIDADES_ROTULO[chave])
     ));
   }
+  const entregaManual = rascunho.mesa === null && rascunho.modalidade === "entrega";
+  mostrar($("#manual-delivery-fields"), entregaManual);
+  if (!entregaManual) {
+    if ($("#manual-phone")) $("#manual-phone").value = "";
+    if ($("#manual-address")) $("#manual-address").value = "";
+  }
 
   render($("#manual-payments"), ...PAGAMENTOS.map(rotulo =>
     el("button.chip", {
@@ -134,6 +140,8 @@ export function abrirVendaManual(mesa = null, callback = null) {
 
   $("#manual-title").textContent = mesa ? `Lancar pedido na mesa ${mesa}` : "Lancar pedido manual";
   $("#manual-customer").value = "";
+  if ($("#manual-phone")) $("#manual-phone").value = "";
+  if ($("#manual-address")) $("#manual-address").value = "";
   if ($("#manual-change-for")) $("#manual-change-for").value = "";
   $("#manual-search").value = "";
   definirErro("");
@@ -151,17 +159,23 @@ async function registrar() {
   definirErro("");
 
   const nome = $("#manual-customer").value.trim();
+  const telefone = $("#manual-phone")?.value.trim() || "";
+  const endereco = $("#manual-address")?.value.trim() || "";
   const trocoPara = normalizarTroco($("#manual-change-for")?.value);
+  if (rascunho.mesa === null && rascunho.modalidade === "entrega") {
+    if (!telefone) return definirErro("Informe o telefone do cliente para entrega.");
+    if (!endereco) return definirErro("Informe o endereco de entrega.");
+  }
   if (rascunho.pagamento === "Dinheiro" && rascunho.mesa === null && !trocoPara) {
     return definirErro("Informe troco para quanto.");
   }
   const corpo = {
     items: rascunho.itens.map(item => ({ id: item.id, qty: item.qty })),
     customer: nome || (rascunho.mesa ? `Mesa ${rascunho.mesa}` : CANAIS_ROTULO[rascunho.canal]),
-    phone: "",
+    phone: telefone,
     place: rascunho.mesa
       ? `Mesa ${rascunho.mesa} - salao`
-      : rascunho.modalidade === "entrega" ? "Entrega" : "Retirada",
+      : rascunho.modalidade === "entrega" ? endereco : "Retirada",
     note: "",
     payment: rascunho.pagamento,
     trocoPara: rascunho.pagamento === "Dinheiro" && rascunho.mesa === null ? trocoPara : null,
