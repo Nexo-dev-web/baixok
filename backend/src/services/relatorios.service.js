@@ -56,14 +56,15 @@ export const relatoriosService = {
     /* Sete agregacoes independentes. Em fila seriam sete idas ao Postgres, uma
      * esperando a outra — o dashboard e a tela mais lenta do painel e nao ha
      * ordem entre elas. */
-    const [resumo, emFalta, porHora, porCanal, porPagamento, porModalidade, maisVendidos] = await Promise.all([
+    const [resumo, emFalta, porHora, porCanal, porPagamento, porModalidade, maisVendidos, vendas] = await Promise.all([
       pedidosRepo.resumoPeriodo(filtro),
       produtosRepo.emFalta(),
       pedidosRepo.porHora(filtro),
       pedidosRepo.agruparPor("canal", filtro),
       pedidosRepo.agruparPor("pagamento", filtro),
       pedidosRepo.agruparPor("modalidade", filtro),
-      pedidosRepo.maisVendidos({ ...filtro, limite: 10 })
+      pedidosRepo.maisVendidos({ ...filtro, limite: 10 }),
+      pedidosRepo.listar({ ...filtro, limite: 200 })
     ]);
 
     return {
@@ -80,6 +81,7 @@ export const relatoriosService = {
       porPagamento,
       porModalidade,
       maisVendidos,
+      vendas: vendas.filter(pedido => !canal || pedido.channel === canal),
       estoqueBaixo: emFalta.map(produto => ({
         id: produto.id, nome: produto.name, estoque: produto.stock, minimo: produto.minStock
       }))

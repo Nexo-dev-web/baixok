@@ -7,8 +7,8 @@
 import { el, render, $, delegar } from "../../../utils/dom.js";
 import { reais, dinheiro } from "../../../utils/formato.js";
 import { CANAIS_ROTULO } from "../../../utils/categorias.js";
-import { apiRelatorios } from "../../../services/api.js";
-import { toastFalha } from "../../../components/toast.js";
+import { apiPedidos, apiRelatorios } from "../../../services/api.js";
+import { toastFalha, toastOk } from "../../../components/toast.js";
 
 const filtros = { periodo: "hoje", canal: "" };
 let ultimoRelatorio = null;
@@ -48,6 +48,34 @@ function barras(linhas, formatar, vazioMensagem = "Sem dados no periodo.", vazio
   ));
 }
 
+function horaCurta(data) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(data));
+}
+
+function vendaLinha(pedido) {
+  const cancelado = pedido.status === "cancelado";
+  return el("article.sale-row", { dataset: { id: pedido.id } },
+    el("div.sale-main", {},
+      el("strong", {}, pedido.customer || "Cliente sem nome"),
+      el("span", {}, `${horaCurta(pedido.createdAt)} | ${CANAIS_ROTULO[pedido.channel] || pedido.channel || "-"} | ${pedido.fulfillment || "-"}`),
+      el("em", {}, pedido.items.map(item => `${item.qty}x ${item.name}`).join(" | ") || "Sem itens")
+    ),
+    el("div.sale-side", {},
+      el("strong", {}, reais(pedido.total || 0)),
+      el("span", { class: cancelado ? "danger-text" : "" }, cancelado ? "Cancelado" : pedido.payment || "Pagamento nao informado"),
+      cancelado
+        ? null
+        : el("button.secondary.small", { type: "button", dataset: { action: "cancel-sale" } }, "Cancelar")
+    )
+  );
+}
+
 export async function desenharDashboard() {
   try {
     ultimoRelatorio = await apiRelatorios.dashboard({
@@ -59,7 +87,7 @@ export async function desenharDashboard() {
     return;
   }
 
-  const { resumo, porHora, porCanal, porPagamento, maisVendidos, estoqueBaixo, periodo } = ultimoRelatorio;
+  const { resumo, porHora, porCanal, porPagamento, maisVendidos, estoqueBaixo, periodo, vendas = [] } = ultimoRelatorio;
 
   render($("#dashboard-metrics"),
     metrica("Faturamento", reais(resumo.faturamento), periodo.rotulo),
@@ -107,6 +135,10 @@ export async function desenharDashboard() {
         "Nenhum item no minimo.",
         "Quando algo baixar, este bloco vira alerta visual."
       ));
+
+  render($("#dashboard-sales"), vendas.length
+    ? vendas.map(vendaLinha)
+    : el("p.faint.pad", {}, "Nenhuma venda neste periodo."));
 }
 
 /* Exportacao em CSV com separador ponto-e-virgula e BOM: e o que o Excel em
@@ -161,4 +193,18 @@ export function ligarDashboard() {
   }
 
   $("#export-dashboard")?.addEventListener("click", exportarPlanilha);
+
+  delegar($("#dashboard-sales"), "click", "[data-action='cancel-sale']", async (_evento, botao) => {
+    const linha = botao.closest(".sale-row");
+    if (!linha) return;
+    botao.disabled = true;
+    try {
+      await apiPedidos.cancelar(linha.dataset.id, "Cancelado pelo dashboard");
+      toastOk("Venda cancelada.");
+      await desenharDashboard();
+    } catch (erro) {
+      toastFalha(erro, "Venda");
+      botao.disabled = false;
+    }
+  });
 }

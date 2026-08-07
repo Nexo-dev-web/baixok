@@ -222,7 +222,7 @@ export const pedidosRepo = {
    * sessao (UTC no Supabase), igual ao que o codigo ja assumia. */
   async porHora({ desde, ate, canal = null }) {
     return await todos(`
-      SELECT to_char(criado_em, 'HH24') AS hora,
+      SELECT to_char(criado_em AT TIME ZONE 'America/Sao_Paulo', 'HH24') AS hora,
              COUNT(*)::int AS pedidos,
              COALESCE(SUM(total), 0) AS faturamento
         FROM pedidos
