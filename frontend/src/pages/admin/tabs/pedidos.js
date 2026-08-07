@@ -20,6 +20,14 @@ const COLUNAS = [
   ["entregue", "Entregue"]
 ];
 
+const colunasDoPapel = papel => papel === "entregador"
+  ? COLUNAS.filter(([status]) => ["pronto", "entregue"].includes(status))
+  : COLUNAS;
+
+const pedidosDoPapel = (pedidos, papel) => papel === "entregador"
+  ? pedidos.filter(pedido => pedido.fulfillment === "entrega" && ["pronto", "entregue"].includes(pedido.status))
+  : pedidos;
+
 const senha = pedido => String(pedido.id).slice(-3).toUpperCase();
 const porChegada = lista => [...lista].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
@@ -27,6 +35,13 @@ const porChegada = lista => [...lista].sort((a, b) => new Date(a.createdAt) - ne
  * balcao. A rota tambem barra — isto aqui e para nao oferecer o botao. */
 function acoes(pedido, papel) {
   const podeOperar = papel === "admin" || papel === "caixa";
+
+  if (papel === "entregador") {
+    if (pedido.status === "pronto" && pedido.fulfillment === "entrega") {
+      return [el("button.ghost-green.small", { type: "button", dataset: { acao: "status", id: pedido.id, status: "entregue" } }, "Marcar entregue")];
+    }
+    return [];
+  }
 
   if (pedido.status === "novo") {
     return [
@@ -55,7 +70,7 @@ function cartao(pedido, papel) {
 
   return el("article.order-card", {
     class: `status-${pedido.status} priority-${prioridade}`,
-    draggable: papel !== "cozinha",
+    draggable: papel === "entregador" ? pedido.fulfillment === "entrega" : papel !== "cozinha",
     dataset: { id: pedido.id }
   },
     el("div.order-top", {},
@@ -88,9 +103,12 @@ export function desenharPedidos() {
   if (!alvo) return;
 
   const papel = estado.usuario?.papel;
-  const pedidos = estado.pedidos.filter(pedido => pedido.status !== "cancelado");
+  const pedidos = pedidosDoPapel(
+    estado.pedidos.filter(pedido => pedido.status !== "cancelado"),
+    papel
+  );
 
-  render(alvo, ...COLUNAS.map(([status, titulo]) => {
+  render(alvo, ...colunasDoPapel(papel).map(([status, titulo]) => {
     const linhas = porChegada(pedidos.filter(pedido => pedido.status === status));
     return el("div.kanban-column", { class: `status-zone-${status}`, dataset: { status } },
       el("h2", {}, titulo, " ", el("span", {}, String(linhas.length))),
@@ -107,6 +125,9 @@ export function desenharPedidos() {
 }
 
 async function mudarStatus(id, status) {
+  if (estado.usuario?.papel === "entregador" && !["pronto", "entregue"].includes(status)) {
+    return toast("Entregador move apenas pedidos em rota ou entregues.");
+  }
   try {
     const { pedido } = await apiPedidos.mudarStatus(id, status);
     /* Aprovar imprime as duas vias, como antes: cozinha monta, balcao entrega. */
@@ -160,6 +181,7 @@ export function ligarPedidos() {
   delegar(alvo, "drop", ".kanban-column", (evento, coluna) => {
     evento.preventDefault();
     const id = evento.dataTransfer.getData("text/plain");
+    if (estado.usuario?.papel === "entregador" && !["pronto", "entregue"].includes(coluna.dataset.status)) return;
     if (id) mudarStatus(id, coluna.dataset.status);
   });
 

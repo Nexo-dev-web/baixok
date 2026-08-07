@@ -26,7 +26,7 @@ CREATE TABLE usuarios (
   usuario       extensions.CITEXT NOT NULL UNIQUE,
   nome          TEXT        NOT NULL,
   senha_hash    TEXT        NOT NULL,
-  papel         TEXT        NOT NULL CHECK (papel IN ('admin', 'caixa', 'cozinha')),
+  papel         TEXT        NOT NULL CHECK (papel IN ('admin', 'caixa', 'cozinha', 'entregador')),
   ativo         INTEGER     NOT NULL DEFAULT 1 CHECK (ativo IN (0, 1)),
   criado_em     TIMESTAMPTZ NOT NULL DEFAULT now(),
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
