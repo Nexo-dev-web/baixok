@@ -60,6 +60,9 @@ export const usuariosService = {
   },
 
   async criar(dados, { usuario: autor, ip }) {
+    if (supabaseAuth.ativo() && !dados.usuario.includes("@")) {
+      throw new ErroApp("Informe um e-mail valido para criar o acesso.", 400, "email_invalido");
+    }
     if (await usuariosRepo.buscarPorUsuario(dados.usuario)) {
       throw conflito("Ja existe alguem com esse nome de usuario.");
     }

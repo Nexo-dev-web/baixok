@@ -1,8 +1,5 @@
-/* Usuarios e auditoria.
- *
- * Esta aba nao cria usuarios nem troca senha. A ideia agora e so gerenciar
- * quem existe no Supabase, ajustar o papel, as permissoes por aba e o status
- * de acesso, sem duplicar credencial em lugar nenhum. */
+/* Usuarios e auditoria. O backend cria a credencial no Supabase Auth (quando
+ * configurado) e o perfil local numa unica operacao. */
 import { el, render, $, delegar } from "../../../utils/dom.js";
 import { dataHora } from "../../../utils/formato.js";
 import { PAPEIS_ROTULO } from "../../../utils/categorias.js";
@@ -118,12 +115,20 @@ function prepararFormulario(usuario = null) {
   const botao = $("#user-submit");
   const papel = $("#user-role");
   const nome = $("#user-name");
+  const login = $("#user-login");
+  const senha = $("#user-password");
+  const credenciais = $("#user-credentials");
+  const cancelar = $("#user-cancel");
   const hint = $("#user-form-hint");
 
   if (usuario) {
     if (titulo) titulo.textContent = `Editando ${usuario.nome}`;
     if (botao) botao.textContent = "Salvar permissoes";
     if (nome) nome.value = usuario.nome || "";
+    if (login) login.required = false;
+    if (senha) senha.required = false;
+    credenciais?.classList.add("hidden");
+    cancelar?.classList.remove("hidden");
     if (papel) papel.value = usuario.papel;
     if (hint) hint.textContent = `Login fixo no Supabase: ${usuario.usuario}`;
     aplicarPermissoesNaTela({
@@ -133,11 +138,21 @@ function prepararFormulario(usuario = null) {
     return;
   }
 
-  if (titulo) titulo.textContent = "Selecione um usuario";
-  if (botao) botao.textContent = "Salvar permissoes";
+  if (titulo) titulo.textContent = "Novo usuario";
+  if (botao) botao.textContent = "Criar usuario";
   if (nome) nome.value = "";
+  if (login) {
+    login.value = "";
+    login.required = true;
+  }
+  if (senha) {
+    senha.value = "";
+    senha.required = true;
+  }
+  credenciais?.classList.remove("hidden");
+  cancelar?.classList.add("hidden");
   if (papel) papel.value = "caixa";
-  if (hint) hint.textContent = "Os usuarios sao criados no Supabase. Aqui voce ajusta o acesso de quem ja existe.";
+  if (hint) hint.textContent = "Use um e-mail valido e uma senha com pelo menos 10 caracteres.";
   aplicarPermissoesNaTela(permissaoPadrao(papel?.value || "caixa"));
 }
 
@@ -208,18 +223,36 @@ export function ligarEquipe() {
   prepararFormulario(null);
 
   $("#user-role")?.addEventListener("change", atualizarPermissoesDoPapel);
+  $("#user-cancel")?.addEventListener("click", () => prepararFormulario(null));
 
   $("#form-usuario")?.addEventListener("submit", async evento => {
     evento.preventDefault();
     const erro = $("#user-error");
     if (!usuarioEmEdicao) {
-      if (erro) {
-        erro.textContent = "Selecione um usuario da lista para editar permissões.";
-        erro.classList.remove("hidden");
+      const papel = $("#user-role").value;
+      const permissoes = montarPermissoesSelecionadas();
+      try {
+        await apiUsuarios.criar({
+          usuario: $("#user-login").value.trim().toLowerCase(),
+          senha: $("#user-password").value,
+          nome: $("#user-name").value.trim(),
+          papel,
+          abasVer: normalizarLista(permissoes.abasVer),
+          abasEditar: normalizarLista(permissoes.abasEditar)
+        });
+        toast("Usuario criado.");
+        evento.target.reset();
+        erro?.classList.add("hidden");
+        prepararFormulario(null);
+        await desenharEquipe();
+      } catch (falha) {
+        if (erro) {
+          erro.textContent = falha.message;
+          erro.classList.remove("hidden");
+        }
       }
       return;
     }
-
     const nome = $("#user-name").value.trim();
     const papel = $("#user-role").value;
     const permissoes = montarPermissoesSelecionadas();

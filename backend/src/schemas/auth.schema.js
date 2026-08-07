@@ -28,8 +28,10 @@ export const criarUsuarioSchema = z.object({
   usuario: z
     .string().trim().toLowerCase()
     .min(3, "O usuario precisa de pelo menos 3 caracteres.")
-    .max(50)
-    .regex(/^[a-z0-9._-]+$/, "Use apenas letras, numeros, ponto, hifen ou sublinhado."),
+    .max(80)
+    .refine(valor =>
+      /^[a-z0-9._-]+$/.test(valor) || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valor),
+    "Informe um e-mail valido ou um nome de usuario."),
   nome: texto(80, { obrigatorio: true }),
   senha: senhaSchema,
   papel: z.enum(TODOS_PAPEIS, { message: "Papel invalido." }),
