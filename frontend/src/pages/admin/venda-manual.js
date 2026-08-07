@@ -7,7 +7,7 @@
 import { el, render, $, delegar, mostrar, ligarModal } from "../../utils/dom.js";
 import { reais } from "../../utils/formato.js";
 import { CANAIS_ROTULO, MODALIDADES_ROTULO } from "../../utils/categorias.js";
-import { apiPedidos } from "../../services/api.js";
+import { apiPedidos, apiPublica } from "../../services/api.js";
 import { estado, carregar, precoEfetivo } from "./store.js";
 import { toast, toastFalha } from "../../components/toast.js";
 
@@ -16,7 +16,85 @@ const PAGAMENTOS = ["Dinheiro", "Pix", "Cartao", "Online"];
 const rascunho = { itens: [], canal: "loja", pagamento: "Dinheiro", modalidade: "retirada", mesa: null };
 let aoConcluir = null;
 
+/* Cotacao de entrega e so previa: quem manda de verdade e o servidor, na hora
+ * de registrar (mesma regra do cardapio do cliente). */
+let cotacaoManual = null;
+let timerBuscaManual = null;
+let requisicaoBuscaManual = null;
+
 const subtotal = () => rascunho.itens.reduce((soma, item) => soma + item.price * item.qty, 0);
+const freteManual = () => rascunho.modalidade === "entrega" && cotacaoManual?.dentro ? Number(cotacaoManual.taxa) : 0;
+
+function limparCotacaoManual() {
+  cotacaoManual = null;
+  const aviso = $("#manual-entrega-aviso");
+  if (aviso) mostrar(aviso, false);
+  render($("#manual-address-sugestoes"));
+}
+
+function descreverCotacaoManual(resultado) {
+  if (!resultado?.configurado) return "";
+  if (!resultado.dentro) return `Esse endereco esta a ${resultado.km} km da loja, fora da area de entrega.`;
+  const minimo = resultado.minimo ? ` · pedido minimo ${reais(resultado.minimo)}` : "";
+  return `Entrega ${resultado.zona} · taxa ${reais(resultado.taxa)}${minimo}`;
+}
+
+async function cotarManual(params) {
+  try {
+    cotacaoManual = await apiPublica.cotarEntrega(params);
+  } catch {
+    cotacaoManual = null;
+  }
+  const aviso = $("#manual-entrega-aviso");
+  if (aviso) {
+    aviso.textContent = descreverCotacaoManual(cotacaoManual);
+    aviso.className = `entrega-aviso ${cotacaoManual?.dentro ? "ok" : "erro"}`;
+    mostrar(aviso, Boolean(aviso.textContent));
+  }
+  desenharCarrinho();
+}
+
+function buscarEnderecoManual(termo) {
+  clearTimeout(timerBuscaManual);
+  requisicaoBuscaManual?.abort();
+
+  const alvo = $("#manual-address-sugestoes");
+  if (!alvo) return;
+
+  if (termo.trim().length < 3) {
+    render(alvo);
+    limparCotacaoManual();
+    return;
+  }
+
+  timerBuscaManual = setTimeout(async () => {
+    const controle = new AbortController();
+    requisicaoBuscaManual = controle;
+    try {
+      const { resultados } = await apiPublica.buscarEndereco(termo.trim(), { sinal: controle.signal });
+      render(alvo, ...resultados.map(item =>
+        el("button.sugestao", {
+          type: "button",
+          dataset: { acao: "escolher-endereco-manual", lng: String(item.lng), lat: String(item.lat), texto: `${item.nome}${item.detalhe ? `, ${item.detalhe}` : ""}` }
+        },
+          el("strong", {}, item.nome),
+          el("span", {}, item.detalhe || "")
+        )
+      ));
+    } catch (erro) {
+      if (erro.name !== "AbortError") render(alvo);
+    } finally {
+      requisicaoBuscaManual = null;
+    }
+  }, 350);
+}
+
+async function escolherEnderecoManual({ texto, lng, lat }) {
+  const campo = $("#manual-address");
+  if (campo) campo.value = texto;
+  render($("#manual-address-sugestoes"));
+  await cotarManual({ q: texto, lng, lat });
+}
 
 function normalizarTroco(valor) {
   const numero = Number(String(valor ?? "").replace(/\./g, "").replace(",", ".").trim());
@@ -62,6 +140,7 @@ function desenharChips() {
   if (!entregaManual) {
     if ($("#manual-phone")) $("#manual-phone").value = "";
     if ($("#manual-address")) $("#manual-address").value = "";
+    limparCotacaoManual();
   }
 
   render($("#manual-payments"), ...PAGAMENTOS.map(rotulo =>
@@ -112,7 +191,10 @@ function desenharCarrinho() {
               el("button", { type: "button", dataset: { acao: "qtd", id: item.id, delta: "1" } }, "+")
             )
           )),
-        el("div.manual-total", {}, el("span", {}, "Total"), el("strong", {}, reais(subtotal())))
+        freteManual() > 0
+          ? el("div.manual-total", {}, el("span", {}, "Taxa de entrega"), el("strong", {}, reais(freteManual())))
+          : null,
+        el("div.manual-total", {}, el("span", {}, "Total"), el("strong", {}, reais(subtotal() + freteManual())))
       ]
     : [el("p.faint", {}, "Nenhum item adicionado.")]));
 
@@ -144,6 +226,7 @@ export function abrirVendaManual(mesa = null, callback = null) {
   if ($("#manual-address")) $("#manual-address").value = "";
   if ($("#manual-change-for")) $("#manual-change-for").value = "";
   $("#manual-search").value = "";
+  limparCotacaoManual();
   definirErro("");
   redesenhar();
   mostrar($("#manual-modal"), true);
@@ -226,6 +309,15 @@ export function ligarVendaManual() {
 
   $("#manual-change-for")?.addEventListener("input", () => {
     if (rascunho.pagamento === "Dinheiro") definirErro("");
+  });
+
+  $("#manual-address")?.addEventListener("input", e => {
+    cotacaoManual = null;
+    buscarEnderecoManual(e.target.value);
+  });
+  delegar(modal, "click", "[data-acao='escolher-endereco-manual']", (_e, botao) => {
+    const { texto, lng, lat } = botao.dataset;
+    escolherEnderecoManual({ texto, lng: Number(lng), lat: Number(lat) });
   });
 
   delegar(modal, "click", "[data-acao='add-item']", (_e, botao) => {
