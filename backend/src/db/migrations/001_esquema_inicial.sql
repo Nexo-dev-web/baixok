@@ -11,7 +11,7 @@ CREATE TABLE usuarios (
   usuario       TEXT    NOT NULL UNIQUE COLLATE NOCASE,
   nome          TEXT    NOT NULL,
   senha_hash    TEXT    NOT NULL,
-  papel         TEXT    NOT NULL CHECK (papel IN ('admin', 'caixa', 'cozinha')),
+  papel         TEXT    NOT NULL CHECK (papel IN ('admin', 'caixa', 'cozinha', 'entregador')),
   ativo         INTEGER NOT NULL DEFAULT 1 CHECK (ativo IN (0, 1)),
   criado_em     TEXT    NOT NULL DEFAULT (datetime('now')),
   atualizado_em TEXT    NOT NULL DEFAULT (datetime('now')),

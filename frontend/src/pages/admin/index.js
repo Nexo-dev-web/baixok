@@ -161,7 +161,7 @@ async function iniciar() {
 
   estado.usuario = sessao.usuario;
   $("#usuario-nome").textContent = sessao.usuario.nome;
-  $("#usuario-papel").textContent = { admin: "Administrador", caixa: "Caixa", cozinha: "Cozinha" }[sessao.usuario.papel];
+  $("#usuario-papel").textContent = { admin: "Administrador", caixa: "Caixa", cozinha: "Cozinha", entregador: "Entregador" }[sessao.usuario.papel];
 
   montarMenu(sessao.usuario);
   ligarShell();

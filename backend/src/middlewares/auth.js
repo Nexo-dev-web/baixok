@@ -10,13 +10,15 @@ import { naoAutenticado, semPermissao } from "../lib/errors.js";
 const ABAS_PADRAO_VER = Object.freeze({
   admin: ["pedidos", "mesas", "produtos", "promos", "entrega", "estoque", "dashboard", "usuarios"],
   caixa: ["pedidos", "mesas", "estoque"],
-  cozinha: ["pedidos"]
+  cozinha: ["pedidos"],
+  entregador: ["pedidos"]
 });
 
 const ABAS_PADRAO_EDITAR = Object.freeze({
   admin: ["pedidos", "mesas", "produtos", "promos", "entrega", "estoque", "dashboard", "usuarios"],
   caixa: ["pedidos", "mesas", "estoque"],
-  cozinha: []
+  cozinha: [],
+  entregador: ["pedidos"]
 });
 
 function listaAbas(usuario, modo = "ver") {

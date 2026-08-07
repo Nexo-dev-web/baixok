@@ -11,13 +11,15 @@ import { supabaseAuth } from "./supabase-auth.js";
 const ABAS_POR_PADRAO = {
   [PAPEIS.ADMIN]: ["pedidos", "mesas", "produtos", "promos", "entrega", "estoque", "dashboard", "plano", "usuarios"],
   [PAPEIS.CAIXA]: ["pedidos", "mesas", "estoque"],
-  [PAPEIS.COZINHA]: ["pedidos"]
+  [PAPEIS.COZINHA]: ["pedidos"],
+  [PAPEIS.ENTREGADOR]: ["pedidos"]
 };
 
 const EDITAVEIS_POR_PADRAO = {
   [PAPEIS.ADMIN]: ["pedidos", "mesas", "produtos", "promos", "entrega", "estoque", "dashboard", "plano", "usuarios"],
   [PAPEIS.CAIXA]: ["pedidos", "mesas", "estoque"],
-  [PAPEIS.COZINHA]: []
+  [PAPEIS.COZINHA]: [],
+  [PAPEIS.ENTREGADOR]: ["pedidos"]
 };
 
 function normalizarLista(valor, fallback = []) {

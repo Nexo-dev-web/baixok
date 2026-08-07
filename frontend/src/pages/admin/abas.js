@@ -8,13 +8,15 @@
 const PAPEL_PADRAO_VER = Object.freeze({
   admin: ["pedidos", "mesas", "produtos", "promos", "entrega", "estoque", "dashboard", "plano", "usuarios"],
   caixa: ["pedidos", "mesas", "estoque"],
-  cozinha: ["pedidos"]
+  cozinha: ["pedidos"],
+  entregador: ["pedidos"]
 });
 
 const PAPEL_PADRAO_EDITAR = Object.freeze({
   admin: ["pedidos", "mesas", "produtos", "promos", "entrega", "estoque", "dashboard", "plano", "usuarios"],
   caixa: ["pedidos", "mesas", "estoque"],
-  cozinha: []
+  cozinha: [],
+  entregador: ["pedidos"]
 });
 
 export const ABAS = Object.freeze({
@@ -23,7 +25,7 @@ export const ABAS = Object.freeze({
     subtitulo: "Tudo que entra pelo cardapio, WhatsApp ou lancamento manual.",
     icone: "☰",
     rotulo: "Pedidos",
-    papeis: ["admin", "caixa", "cozinha"]
+    papeis: ["admin", "caixa", "cozinha", "entregador"]
   },
   mesas: {
     titulo: "Mesas do salao",

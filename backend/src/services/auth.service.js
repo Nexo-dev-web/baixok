@@ -18,13 +18,15 @@ import { supabaseAuth } from "./supabase-auth.js";
 const ABAS_POR_PADRAO = {
   [PAPEIS.ADMIN]: ["pedidos", "mesas", "produtos", "promos", "entrega", "estoque", "dashboard", "plano", "usuarios"],
   [PAPEIS.CAIXA]: ["pedidos", "mesas", "estoque"],
-  [PAPEIS.COZINHA]: ["pedidos"]
+  [PAPEIS.COZINHA]: ["pedidos"],
+  [PAPEIS.ENTREGADOR]: ["pedidos"]
 };
 
 const EDITAVEIS_POR_PADRAO = {
   [PAPEIS.ADMIN]: ["pedidos", "mesas", "produtos", "promos", "entrega", "estoque", "dashboard", "plano", "usuarios"],
   [PAPEIS.CAIXA]: ["pedidos", "mesas", "estoque"],
-  [PAPEIS.COZINHA]: []
+  [PAPEIS.COZINHA]: [],
+  [PAPEIS.ENTREGADOR]: ["pedidos"]
 };
 
 function normalizarEmail(email) {
@@ -65,7 +67,7 @@ function nomePadraoPorEmail(email) {
 }
 
 function papelPadraoPorEmail(email, sugerido) {
-  if (sugerido === PAPEIS.ADMIN || sugerido === PAPEIS.CAIXA || sugerido === PAPEIS.COZINHA) {
+  if ([PAPEIS.ADMIN, PAPEIS.CAIXA, PAPEIS.COZINHA, PAPEIS.ENTREGADOR].includes(sugerido)) {
     return sugerido;
   }
   const login = normalizarEmail(email);
